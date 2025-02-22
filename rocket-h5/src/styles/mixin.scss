@@ -1,0 +1,154 @@
+@mixin clearfix {
+  &:after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+}
+
+@mixin scrollBar {
+  &::-webkit-scrollbar-track-piece {
+    background: #d3dce6;
+  }
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #99a9bf;
+    border-radius: 20px;
+  }
+}
+
+@mixin relative {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+@mixin pct($pct) {
+  width: #{$pct};
+  position: relative;
+  margin: 0 auto;
+}
+
+@mixin triangle($width, $height, $color, $direction) {
+  $width: $width/2;
+  $color-border-style: $height solid $color;
+  $transparent-border-style: $width solid transparent;
+  height: 0;
+  width: 0;
+
+  @if $direction==up {
+    border-bottom: $color-border-style;
+    border-left: $transparent-border-style;
+    border-right: $transparent-border-style;
+  }
+
+  @else if $direction==right {
+    border-left: $color-border-style;
+    border-top: $transparent-border-style;
+    border-bottom: $transparent-border-style;
+  }
+
+  @else if $direction==down {
+    border-top: $color-border-style;
+    border-left: $transparent-border-style;
+    border-right: $transparent-border-style;
+  }
+
+  @else if $direction==left {
+    border-right: $color-border-style;
+    border-top: $transparent-border-style;
+    border-bottom: $transparent-border-style;
+  }
+}
+
+/*
+ * 名称：size
+ * 说明：设置宽高
+ */
+@mixin size($width, $height) {
+  width: $width;
+  height: $height;
+}
+
+/*
+ * 名称：flex
+ * 说明：设置元素为flex,并设置justifyContent和alignItems
+ */
+@mixin flex($justify: null, $align: null) {
+  display: flex;
+  justify-content: $justify;
+  align-items: $align;
+}
+
+/*
+ * 名称：cloum
+ * 说明：设置flex的方向为竖
+ */
+@mixin column() {
+  flex-direction: column;
+}
+
+/*
+ * 名称：flexColumnSeparate
+ * 说明：两个子元素，一个在最上，一个在最下
+ */
+@mixin flexColumnSeparate() {
+  @include flex(space-between);
+  flex-direction: column;
+}
+
+/*
+ * 名称：font
+ * 说明：设置元素font-size和color
+ */
+@mixin font($fontSize, $color: null) {
+  font-size: $fontSize;
+  color: $color;
+}
+
+/*
+ * 名称：contain
+ * 说明：设置背景图片尺寸为contain
+ */
+@mixin contain() {
+  background-size: contain;
+}
+
+/*
+ * 名称：cover
+ * 说明：设置背景图片尺寸为cover
+ */
+@mixin cover() {
+  background-size: cover;
+}
+
+/*
+ * 名称：textOverflow
+ * 说明：多余文字隐藏
+ */
+@mixin textOverflow($line: 1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: $line;
+  /* number of lines to show */
+  -webkit-box-orient: vertical;
+}
+
+/*
+ * 名称：lineOverflow
+ * 说明：多行文字隐藏
+ */
+@mixin lineOverflow($line: 1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: $line;
+  /* number of lines to show */
+  -webkit-box-orient: vertical;
+}
+

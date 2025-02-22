@@ -1,0 +1,7 @@
+
+//重置table的样式（在需要重置的table上添加class局部修改）
+.reset-el-table{
+  /deep/ .cell{
+     word-break: break-word!important;
+  }
+}

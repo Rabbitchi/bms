@@ -1,0 +1,31 @@
+
+.dialog_form_wrap{
+// width: 40%!important;
+  /deep/ .el-form-item__label{
+    height: 44px;
+    text-align: left;
+    position: absolute;
+    top: 50%;
+    margin-top: -22px;
+    padding: 0 12px 0 0;
+    line-height: unset;
+  }
+  /deep/ .el-input {
+    width: initial;
+  }
+  /deep/ .el-input--suffix .el-input__inner {
+    padding: 0 15px;
+  }
+  //每列设置padding-left
+  .el-form .el-row .el-col{
+    box-sizing: border-box;
+    padding-right: 5px;
+  }
+  //最后一列，不需要padding-left
+  .el-form .el-row .el-col:last-child{
+   padding-right: 0;
+  }
+  /deep/ .el-date-editor .el-input__inner{
+    padding-left: 30px;
+  }
+}
