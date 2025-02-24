@@ -43,7 +43,7 @@ export default defineComponent({
 
 <style scoped>
 .sidebar {
-  width: 200px;
+  width: 120px;
   background-color: #f8f9fa;
   padding: 20px;
   border-right: 1px solid #dee2e6;
