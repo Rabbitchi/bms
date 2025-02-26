@@ -8,6 +8,13 @@
 
     <!-- 销售概况 -->
     <div v-else-if="currentView === 'sales-overview'" class="dashboard">
+
+      <!-- 年份选择 -->
+      <div class="year-selector">
+        <el-select v-model="selectedYear" placeholder="选择年份" @change="handleYearChange" style="width: 120px">
+          <el-option v-for="year in yearOptions" :key="year" :label="year" :value="year" />
+        </el-select>
+      </div>
       <div class="stats">
         <el-card class="stat-card">
           <h3>总订单数</h3>
@@ -19,6 +26,7 @@
         </el-card>
       </div>
 
+      <!-- 图表 -->
       <div class="charts">
         <el-card class="chart-card">
           <h4>月度销售趋势</h4>
@@ -35,61 +43,46 @@
     <div v-else-if="currentView === 'order-management'">
       <div class="table-header">
         <el-row :gutter="20" class="toolbar" justify="space-between">
+          <!-- 左侧按钮组 -->
           <el-col :span="16">
             <div class="button-group">
               <el-button type="primary" @click="showAddDialog">新增订单</el-button>
               <el-button @click="handleExport" style="margin-left: 10px">导出Excel</el-button>
-              <el-upload 
-              action="/api/order/import" 
-              :show-file-list="false" 
-              :on-success="handleImportSuccess"
-              style="margin-left: 10px"
-                :before-upload="beforeImport" accept=".xlsx, .xls" class="upload-demo">
+              <el-upload action="/api/order/import" :show-file-list="false" :on-success="handleImportSuccess"
+                style="margin-left: 10px" :before-upload="beforeImport" accept=".xlsx, .xls" class="upload-demo">
                 <el-button type="success">导入Excel</el-button>
               </el-upload>
             </div>
           </el-col>
-         <!-- 右侧搜索组 -->
-         <el-col :span="8">
-      <el-row :gutter="10" class="search-group" justify="end">
-        <!-- <el-col :span="24">
-          <el-input v-model="searchQuery" placeholder="全局搜索..." @input="handleSearch" clearable />
-        </el-col> -->
-      </el-row>
-    </el-col>
         </el-row>
-
-
-
+        <!-- 右侧搜索组 -->
         <el-row :gutter="10" class="search-filters" justify="end">
           <el-col :span="6">
-            <el-date-picker 
-            v-model="dateRange" 
-            type="daterange" range-separator="至" start-placeholder="开始日期"
-            style="width: 100%"
-            end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="handleDateChange" />
+            <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期"
+              style="width: 100%" end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="handleDateChange" />
           </el-col>
+          <!-- 公司名称下拉选择 -->
           <el-col :span="4">
-            <el-input v-model="companyFilter" placeholder="公司名称" @input="handleSearch" clearable />
+            <el-select v-model="companyFilter" placeholder="公司名称" filterable clearable @change="handleSearch">
+              <el-option v-for="company in companyOptions" :key="company.value" :label="company.label"
+                :value="company.value" />
+            </el-select>
           </el-col>
+
           <el-col :span="4">
-            <el-input v-model="salesmanFilter" placeholder="销售员" @input="handleSearch" clearable />
+            <el-select v-model="salesmanFilter" placeholder="销售员" filterable clearable @change="handleSearch">
+              <el-option v-for="salesman in salesmanOptions" :key="salesman.value" :label="salesman.label"
+                :value="salesman.value" />
+            </el-select>
           </el-col>
+
           <el-col :span="3">
-            <el-button type="primary" @click="handleSearch" width="100%">搜索</el-button>
+            <el-button type="primary" @click="handleSearch" style="width: 100%">搜索</el-button>
           </el-col>
         </el-row>
       </div>
 
       <el-card class="table-card">
-        <!-- <el-table 
-        :data="filteredPaginatedData" 
-        border 
-        stripe 
-        style="width: 100%" 
-        v-loading="loading"
-        @selection-change="handleSelectionChange">
-        </el-table> -->
 
         <el-table :data="paginatedData" border stripe style="width: 100%" v-loading="loading"
           @selection-change="handleSelectionChange">
@@ -157,7 +150,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watch, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { defineComponent, ref, watch, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 import * as XLSX from 'xlsx'
@@ -211,6 +204,44 @@ export default defineComponent({
     }
   },
   setup(props) {
+
+    //(0)通用配置
+    onMounted(() => {
+      window.addEventListener('resize', resizeCharts)
+      generateYearOptions()
+      fetchData()
+      // 只在订单管理界面加载下拉数据
+      if (props.currentView === 'order-management') {
+        fetchCompanies()
+        fetchSalesmen()
+      }
+    })
+
+    // 动态表头
+    const tableHeaders = computed(() => {
+      return TABLE_HEADERS_MAP[props.currentView as keyof typeof TABLE_HEADERS_MAP] || {}
+    })
+
+
+
+    //(1)销售概况相关
+
+    // 年份状态
+    const selectedYear = ref(new Date().getFullYear())
+    const yearOptions = ref<number[]>([])
+    const generateYearOptions = () => {
+      const currentYear = new Date().getFullYear()
+      for (let i = -6; i <= 0; i++) {
+        yearOptions.value.push(currentYear + i)
+      }
+    }
+    // 处理年份变化
+    const handleYearChange = () => {
+      fetchData()
+    }
+
+
+    //图表实例
     const data = ref<any>({})
     const loading = ref(false)
     const error = ref('')
@@ -221,12 +252,14 @@ export default defineComponent({
     let barChart: echarts.ECharts | null = null
     let pieChart: echarts.ECharts | null = null
 
+    // (2)订单管理相关
 
 
-    // 动态表头
-    const tableHeaders = computed(() => {
-      return TABLE_HEADERS_MAP[props.currentView as keyof typeof TABLE_HEADERS_MAP] || {}
-    })
+
+
+
+
+
 
     const fetchData = async () => {
       try {
@@ -239,15 +272,24 @@ export default defineComponent({
           'employee-management': 'employee/show'
         }
 
-        const response = await axios.get(
-          `http://localhost:8086/${apiMap[props.currentView]}`
-        )
-        data.value = response.data
-
         // 初始化图表
         if (props.currentView === 'sales-overview') {
-          await initCharts()
+          const response = await axios.get(
+            `http://localhost:8086/boards/show?year=${selectedYear.value}`
+          )
+          data.value = response.data
+          // 等待 DOM 更新完成
+          watchEffect(() => {
+            initCharts();
+          })
+        } else {
+          const response = await axios.get(
+            `http://localhost:8086/${apiMap[props.currentView]}`
+          )
+          data.value = response.data
         }
+
+
 
       } catch (err) {
         error.value = '数据加载失败，请稍后重试'
@@ -258,9 +300,7 @@ export default defineComponent({
     }
 
     // 图表初始化
-    const initCharts = async () => {
-      // 等待 DOM 更新完成
-      await nextTick()
+    const initCharts = () => {
       // 销毁旧实例
       if (barChart) {
         barChart.dispose()
@@ -271,19 +311,18 @@ export default defineComponent({
         pieChart = null
       }
       // 初始化新实例（添加空值检查）
-
       if (barChartRef.value && pieChartRef.value) {
-        console.log('init charts')
         barChart = echarts.init(barChartRef.value)
         pieChart = echarts.init(pieChartRef.value)
-
         // 配置图表选项
         barChart.setOption({
           xAxis: {
+            name: '月份',
             type: 'category',
             data: data.value.barCharts.map(item => item.month)
           },
           yAxis: {
+            name: '销售额',
             type: 'value'
           },
           series: [
@@ -295,13 +334,9 @@ export default defineComponent({
         })
 
         pieChart.setOption({
-
-
           color: ['#3398DB', '#FF9900', '#1E90FF', '#FF4500', '#FF8C00', '#B8860B', '#CD5C5C', '#483D8B'],
-
           title: {
-            text: 'Referer of a Website',
-            subtext: 'Fake Data',
+            text: '销售员业绩分布',
             left: 'center'
           },
           tooltip: {
@@ -313,7 +348,7 @@ export default defineComponent({
           },
           series: [
             {
-              name: '销售员业绩',
+              name: '销售额',
               type: 'pie',
               radius: '50%',
               data: data.value.pieCharts.map(item => ({ name: item.saleName, value: item.orderAmount })),
@@ -337,10 +372,37 @@ export default defineComponent({
       pieChart?.resize()
     }
 
-    onMounted(() => {
-      window.addEventListener('resize', resizeCharts)
-      fetchData()
-    })
+
+    const companyOptions = ref<{ value: string, label: string }[]>([]);
+
+    const salesmanOptions = ref<{ value: string, label: string }[]>([]);
+    const fetchCompanies = async () => {
+
+      try {
+        const response = await axios.get('http://localhost:8086/customer/getNameList');
+        companyOptions.value = response.data.map((item: any) => ({
+          value: item,
+          label: item
+        }));
+      } catch (err) {
+        console.error('获取公司列表失败:', err)
+        ElMessage.error('公司列表加载失败')
+      }
+    }
+
+    const fetchSalesmen = async () => {
+
+      try {
+        const response = await axios.get('http://localhost:8086/employee/getNameList');
+        salesmanOptions.value = response.data.map((item: any) => ({
+          value: item,
+          label: item
+        }));
+      } catch (err) {
+        console.error('获取销售员列表失败:', err)
+        ElMessage.error('销售员列表加载失败')
+      }
+    }
 
     onBeforeUnmount(() => {
       window.removeEventListener('resize', resizeCharts)
@@ -348,7 +410,13 @@ export default defineComponent({
       pieChart?.dispose()
     })
 
-    watch(() => props.currentView, fetchData, { immediate: true })
+    watch(() => props.currentView, (newVal) => {
+      if (newVal === 'order-management') {
+        fetchCompanies()
+        fetchSalesmen()
+      }
+      fetchData()
+    }, { immediate: true })
 
     const currentPage = ref(1)
     const pageSize = ref(10)
@@ -448,19 +516,19 @@ export default defineComponent({
     // 计算过滤后的数据
     const filteredData = computed(() => {
       return data.value.filter(item => {
-        const matchesSearch = Object.values(item).some(value => 
+        const matchesSearch = Object.values(item).some(value =>
           String(value).toLowerCase().includes(searchQuery.value.toLowerCase())
         )
-        
+
         const matchesDate = !dateRange.value?.length || (
           new Date(item.startDate) >= new Date(dateRange.value[0]) &&
           new Date(item.startDate) <= new Date(dateRange.value[1])
         )
-        
-        const matchesCompany = !companyFilter.value || 
+
+        const matchesCompany = !companyFilter.value ||
           item.company?.includes(companyFilter.value)
-        
-        const matchesSalesman = !salesmanFilter.value || 
+
+        const matchesSalesman = !salesmanFilter.value ||
           item.salesman?.includes(salesmanFilter.value)
 
         return matchesSearch && matchesDate && matchesCompany && matchesSalesman
@@ -484,7 +552,7 @@ export default defineComponent({
 
     // 导入前校验
     const beforeImport = (file: File) => {
-      const isExcel = file.type.includes('sheet') || 
+      const isExcel = file.type.includes('sheet') ||
         ['xlsx', 'xls'].includes(file.name.split('.').pop() || '')
       if (!isExcel) {
         ElMessage.error('只能上传Excel文件!')
@@ -505,6 +573,11 @@ export default defineComponent({
 
 
     return {
+      companyOptions,
+      salesmanOptions,
+      selectedYear,
+      yearOptions,
+      handleYearChange,
       data, loading, error, tableHeaders, barChartRef,
       pieChartRef,
       fetchData,
@@ -538,6 +611,13 @@ export default defineComponent({
 </script>
 
 <style scoped>
+/* 新增年份选择器样式 */
+.year-selector {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
 /* 工具条样式 */
 .toolbar {
   margin-bottom: 15px;
@@ -555,10 +635,10 @@ export default defineComponent({
   margin: 15px 0;
   display: flex;
   justify-content: flex-end;
-  
+
   .el-col {
     margin-left: 10px;
-    
+
     &:first-child {
       margin-left: 0;
     }
@@ -566,12 +646,13 @@ export default defineComponent({
 }
 
 /* 输入框统一样式 */
-.el-input, .el-date-editor {
+.el-input,
+.el-date-editor {
   width: 100%;
 }
 
 /* 按钮间距调整 */
-.el-button + .el-button {
+.el-button+.el-button {
   margin-left: 10px;
 }
 
@@ -579,16 +660,20 @@ export default defineComponent({
 .search-button {
   margin-left: 10px;
 }
+
 .toolbar {
   margin-bottom: 15px;
 }
+
 .search-filters {
   margin: 15px 0;
 }
+
 .upload-demo {
   display: inline-block;
   margin-left: 10px;
 }
+
 .centered-button {
   display: flex;
   align-items: center;
