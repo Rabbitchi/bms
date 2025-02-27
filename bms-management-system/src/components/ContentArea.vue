@@ -48,8 +48,9 @@
             <div class="button-group">
               <el-button type="primary" @click="showAddDialog">新增订单</el-button>
               <el-button @click="handleExport" style="margin-left: 10px">导出Excel</el-button>
-              <el-upload action="/api/order/import" :show-file-list="false" :on-success="handleImportSuccess"
-                style="margin-left: 10px" :before-upload="beforeImport" accept=".xlsx, .xls" class="upload-demo">
+              <!-- 在模板部分修改el-upload组件 -->
+              <el-upload action="" :show-file-list="false" :http-request="handleImport" :before-upload="beforeImport"
+                accept=".xlsx, .xls" style="margin-left: 10px">
                 <el-button type="success">导入Excel</el-button>
               </el-upload>
             </div>
@@ -84,7 +85,7 @@
 
       <el-card class="table-card">
 
-        <el-table :data="paginatedData" border stripe style="width: 100%" v-loading="loading"
+        <el-table :data="data" border stripe style="width: 100%" v-loading="loading"
           @selection-change="handleSelectionChange">
           <!-- 复选框列 -->
           <el-table-column type="selection" width="55" align="center" />
@@ -92,8 +93,7 @@
           <template v-for="(value, key) in tableHeaders" :key="key">
 
             <!-- 单独处理 ID 列 -->
-            <el-table-column v-if="key === 'id'" prop="id" label="ID" width="60" align="center" />
-            <el-table-column v-if="key !== 'id'" :prop="key" :label="value" min-width="80">
+            <el-table-column v-if="key" :prop="key" :label="value" min-width="80">
               <template #default="{ row, $index }">
                 <template v-if="editingIndex === $index">
                   <el-input v-model="editForm[key]" @blur="saveEdit(row)" />
@@ -119,7 +119,7 @@
           </el-table-column>
         </el-table>
 
-        <el-pagination class="pagination" :current-page="currentPage" :page-size="pageSize" :total="data.length"
+        <el-pagination class="pagination" :current-page="currentPage" :page-size="pageSize" :total="total"
           @current-change="handlePageChange" layout="prev, pager, next" />
       </el-card>
     </div>
@@ -154,14 +154,13 @@ import { defineComponent, ref, watch, computed, onMounted, onBeforeUnmount, watc
 import axios from 'axios'
 import * as echarts from 'echarts'
 import * as XLSX from 'xlsx'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { ElCard, ElTable, ElTableColumn } from 'element-plus'
 
 // 表头中英文映射配置
 const TABLE_HEADERS_MAP = {
   // 订单管理
   'order-management': {
-    id: 'ID',
     orderId: '订单编号',
     startDate: '开始日期',
     salesman: '销售员',
@@ -255,9 +254,9 @@ export default defineComponent({
     // (2)订单管理相关
 
 
+  
 
-
-
+    const total = ref(0)
 
 
 
@@ -267,7 +266,7 @@ export default defineComponent({
         error.value = ''
         const apiMap = {
           'sales-overview': 'boards/show',
-          'order-management': 'order/show',
+          'order-management': 'order/pageFind',
           'customer-management': 'customer/show',
           'employee-management': 'employee/show'
         }
@@ -282,6 +281,14 @@ export default defineComponent({
           watchEffect(() => {
             initCharts();
           })
+        } else if (props.currentView === 'order-management') {
+          const params = {
+            page: currentPage.value - 1, // 后端页码从0开始
+            size: pageSize.value,
+          }
+          const response = await axios.get(`http://localhost:8086/${apiMap[props.currentView]}`, { params })
+          data.value = response.data.page
+          total.value = response.data.pageTotal
         } else {
           const response = await axios.get(
             `http://localhost:8086/${apiMap[props.currentView]}`
@@ -426,11 +433,11 @@ export default defineComponent({
     const newOrder = ref<any>({})
 
     // 分页数据计算
-    const paginatedData = computed(() => {
-      const start = (currentPage.value - 1) * pageSize.value
-      const end = start + pageSize.value
-      return data.value.slice(start, end)
-    })
+    // const paginatedData = computed(() => {
+    //   const start = (currentPage.value - 1) * pageSize.value
+    //   const end = start + pageSize.value
+    //   return data.value.slice(start, end)
+    // })
 
     // 编辑操作
     const handleEdit = (row: any, index: number) => {
@@ -462,7 +469,7 @@ export default defineComponent({
         cancelButtonText: '取消',
         type: 'warning'
       }).then(async () => {
-        await axios.delete(`http://localhost:8086/order/delete?id=${row.id}`)
+        await axios.delete(`http://localhost:8086/order/delete?orderId=${row.orderId}`)
         data.value = data.value.filter((item: any) => item.id !== row.id)
         ElMessage.success('删除成功')
       })
@@ -488,6 +495,7 @@ export default defineComponent({
     // 分页变化处理
     const handlePageChange = (val: number) => {
       currentPage.value = val
+      fetchData() // 切换页码时重新请求
     }
 
 
@@ -506,11 +514,13 @@ export default defineComponent({
     // 处理搜索
     const handleSearch = () => {
       currentPage.value = 1
+      fetchData()
     }
 
     // 处理日期筛选
     const handleDateChange = () => {
       currentPage.value = 1
+      fetchData()
     }
 
     // 计算过滤后的数据
@@ -543,29 +553,113 @@ export default defineComponent({
     })
 
     // 导出Excel
-    const handleExport = () => {
-      const worksheet = XLSX.utils.json_to_sheet(filteredData.value)
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据')
-      XLSX.writeFile(workbook, `订单数据_${new Date().toISOString()}.xlsx`)
+    // const handleExport = () => {
+    //   const worksheet = XLSX.utils.json_to_sheet(filteredData.value)
+    //   const workbook = XLSX.utils.book_new()
+    //   XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据')
+    //   XLSX.writeFile(workbook, `订单数据_${new Date().toISOString()}.xlsx`)
+    // }
+    const handleExport = async () => {
+      try {
+        if (selectedRows.value.length > 0) {
+          // 导出选中行（前端导出）
+          const worksheet = XLSX.utils.json_to_sheet(selectedRows.value)
+          const workbook = XLSX.utils.book_new()
+          XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据')
+          XLSX.writeFile(workbook, `选中订单_${new Date().toISOString()}.xlsx`)
+          ElMessage.success('导出成功')
+        } else {
+          // 导出全部（后端导出）
+          const params = {
+            startDate: dateRange.value?.[0],
+            endDate: dateRange.value?.[1],
+            company: companyFilter.value,
+            salesman: salesmanFilter.value
+          }
+
+          const response = await axios.get('http://localhost:8086/order/export', {
+            params,
+            responseType: 'blob' // 关键：指定响应类型为二进制
+          })
+
+          // 创建下载链接
+          const url = window.URL.createObjectURL(new Blob([response.data]))
+          const link = document.createElement('a')
+          link.href = url
+          link.setAttribute('download', `订单导出_${new Date().toISOString()}.xlsx`)
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          ElMessage.success('导出成功')
+        }
+      } catch (err) {
+        console.error('导出失败:', err)
+        ElMessage.error('导出失败')
+      }
     }
 
-    // 导入前校验
+
+    // 导入处理方法
+    const handleImport = async (options: any) => {
+      let loadingInstance: ReturnType<typeof ElLoading.service> | null = null // 明确类型定义
+      try {
+        const formData = new FormData()
+        formData.append('file', options.file)
+
+        loadingInstance = ElLoading.service({
+          lock: true,
+          text: '正在导入，请稍候...',
+          background: 'rgba(0, 0, 0, 0.7)'
+        })
+
+        const response = await axios.post('http://localhost:8086/order/import', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            // 如果有需要可以添加认证头
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+
+        if (response.data.code === 200) {
+          ElMessage.success('导入成功')
+          await fetchData()
+        } else {
+          ElMessage.error(`导入失败：${response.data.message}`)
+        }
+      } catch (err) {
+        console.error('导入失败:', err)
+        ElMessage.error('文件导入失败，请检查文件格式或联系管理员')
+      } finally {
+        if (loadingInstance) {
+          loadingInstance.close()
+        }
+      }
+    }
+
+
+
+    // 完善beforeImport校验
     const beforeImport = (file: File) => {
       const isExcel = file.type.includes('sheet') ||
         ['xlsx', 'xls'].includes(file.name.split('.').pop() || '')
+      const isLt10M = file.size / 1024 / 1024 < 10
+
       if (!isExcel) {
         ElMessage.error('只能上传Excel文件!')
+        return false
+      }
+      if (!isLt10M) {
+        ElMessage.error('文件大小不能超过10MB!')
         return false
       }
       return true
     }
 
     // 导入成功处理
-    const handleImportSuccess = async (response: any, file: File) => {
+    const handleImportSuccess = (response: any) => {
       if (response.code === 200) {
         ElMessage.success('导入成功')
-        await fetchData()
+        fetchData()
       } else {
         ElMessage.error('导入失败: ' + response.message)
       }
@@ -583,7 +677,6 @@ export default defineComponent({
       fetchData,
       currentPage,
       pageSize,
-      paginatedData,
       handleEdit,
       handleDelete,
       editingIndex,
@@ -604,6 +697,7 @@ export default defineComponent({
       filteredPaginatedData,
       handleExport,
       beforeImport,
+      handleImport,
       handleImportSuccess
     }
   }
