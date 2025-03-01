@@ -13,41 +13,92 @@
           </el-col>
         </el-row>
         <el-row :gutter="10" class="search-filters" justify="end">
-          <el-col :span="6">
+          <!-- 付款状态过滤 -->
+          <el-col :span="3">
+          <el-select v-model="paymentFilter" placeholder="是否付款" clearable>
+            <el-option label="全部" value="" />
+            <el-option label="已付款" value="paid" />
+            <el-option label="未付款" value="unpaid" />
+          </el-select>
+        </el-col>
+          <!-- 状态过滤和关键字搜索 -->
+        <el-col :span="3">
+          <el-select v-model="statusFilter" placeholder="订单状态" clearable>
+            <el-option label="全部" value="all" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="未完成" value="uncompleted" />
+          </el-select>
+        </el-col>
+        <!-- 项目搜索 -->
+        <el-col :span="4">
+          <el-input 
+            v-model="keywordFilter" 
+            placeholder="项目搜索" 
+            clearable 
+            @keyup.enter="handleSearch"
+          />
+        </el-col>
+
+        <!-- 日期范围搜索 -->
+          <el-col :span="5">
             <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" style="width: 100%" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
           </el-col>
-          <el-col :span="4">
+          <!-- 公司名称搜索 -->
+          <el-col :span="3">
             <el-select v-model="companyFilter" placeholder="公司名称" filterable clearable>
               <el-option v-for="company in companyOptions" :key="company.value" :label="company.label" :value="company.value" />
             </el-select>
           </el-col>
-          <el-col :span="4">
+          <!-- 销售员搜索 -->
+          <el-col :span="3">
             <el-select v-model="salesmanFilter" placeholder="销售员" filterable clearable>
               <el-option v-for="salesman in salesmanOptions" :key="salesman.value" :label="salesman.label" :value="salesman.value" />
             </el-select>
           </el-col>
+          <!-- 搜索按钮 -->
           <el-col :span="3">
             <el-button type="primary" @click="handleSearch" style="width: 100%">搜索</el-button>
           </el-col>
         </el-row>
       </div>
+      <!-- 订单列表 -->
       <el-card class="table-card">
-        <el-table :data="orderData" border stripe style="width: 100%" v-loading="loading" @selection-change="handleSelectionChange">
+        <el-table 
+        :data="orderData" 
+        :cell-style="handleCellStyle"
+        :row-class-name="handleRowClass"
+        border stripe style="width: 100%" 
+        v-loading="loading" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="55" align="center" />
           <el-table-column type="index" :index="(index) => (currentPage - 1) * pageSize + index + 1" label="序号" width="60" align="center" />
+          
           <template v-for="(value, key) in tableHeaders" :key="key">
-            <el-table-column v-if="key" :prop="key" :label="value" min-width="80">
+            <el-table-column v-if="key!=='status'&& key" :prop="key" :label="value" min-width="80">
               <template #default="{ row, $index }">
                 <template v-if="editingIndex === $index">
-                  <el-input v-model="editForm[key]" @blur="saveEdit(row)" />
+                  <el-input v-model="editForm[key]" />
                 </template>
                 <span v-else>{{ row[key] }}</span>
               </template>
             </el-table-column>
           </template>
+
+            <!-- 状态列 -->
+            <el-table-column prop="status" label="完成状态">
+             <template #default="{ row, $index }">
+              <template v-if="editingIndex === $index">
+                <el-input v-model="editForm.status" />
+              </template>
+              <span v-else :style="statusStyle(row.status)">{{ row.status }}</span>
+            </template>
+           </el-table-column>
+
+           <!-- 操作列 -->
           <el-table-column label="操作" width="60">
             <template #default="{ row, $index }">
-              <el-button class="centered-button" size="small" type="success" @click="handleEdit(row, $index)" :icon="editingIndex === $index ? 'Check' : 'Edit'">编辑</el-button>
+              <el-button class="centered-button" size="small" type="success" 
+              @click="handleEdit(row, $index)" 
+              :icon="editingIndex === $index ? 'Check' : 'Edit'">{{ editingIndex === $index ? '保存' : '编辑' }}</el-button>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="60">
@@ -56,8 +107,11 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <!-- 底部分页 -->
         <el-pagination class="pagination" :current-page="currentPage" :page-size="pageSize" :total="total" @current-change="handlePageChange" layout="prev, pager, next" />
       </el-card>
+      <!-- 新增订单对话框 -->
       <el-dialog v-model="addDialogVisible" title="新增订单" width="600px">
         <el-form :model="newOrder" label-width="100px">
           <el-form-item v-for="(_, key) in tableHeaders" :key="key" :label="tableHeaders[key]">
@@ -98,7 +152,11 @@
       const newOrder = ref<any>({});
       const companyOptions = ref<{ value: string, label: string }[]>([]);
       const salesmanOptions = ref<{ value: string, label: string }[]>([]);
-  
+
+      const statusFilter = ref('all');
+      const keywordFilter = ref('');
+      const paymentFilter = ref('');
+
       const tableHeaders = {
         orderId: '订单编号',
         startDate: '开始日期',
@@ -116,9 +174,45 @@
         amountCollected: '实收金额',
         paymentDate: '付款日期',
         changeReason: '变更原因',
-        reportId: '报告编号',
+        status: '完成状态',
       };
   
+      // 完成状态样式
+    const statusStyle = (status: string) => {
+      const style: any = {
+        padding: '4px 8px',
+        borderRadius: '4px',
+        display: 'inline-block'
+      }
+      
+      if (status === '已完成') {
+        style.backgroundColor = '#e8f5e9';
+        style.color = '#2e7d32';
+      } else if (status === '未完成') {
+        style.backgroundColor = '#ffebee';
+        style.color = '#c62828';
+      }
+      return style;
+    }
+
+    // 统一单元格样式
+    const handleCellStyle = ({ column, row }: { column: any, row: any }) => {
+      if (column.property === 'status') {
+        return { padding: '4px' }; 
+      }
+      return {};
+    }
+
+
+  
+    // 金额行高亮
+    const handleRowClass = ({ row }: { row: any }) => {
+      if (row.amountReceivable > row.amountCollected) {
+        return 'amount-warning-row';
+      }
+      return '';
+    }
+
       const fetchData = async () => {
         try {
           loading.value = true;
@@ -129,7 +223,12 @@
             endDate: dateRange.value[1] || '',
             company: companyFilter.value,
             salesman: salesmanFilter.value,
+            status: statusFilter.value||"all",
+            keyword: keywordFilter.value,
+            paymentStatus: paymentFilter.value||''
           };
+          console.log('请求参数:', params);
+          
           const response = await getOrderList(params);
           orderData.value = response.data.records;
           total.value = response.data.total;
@@ -140,28 +239,24 @@
         }
       };
   
-      const handleEdit = (row: any, index: number) => {
+      const handleEdit = async (row: any, index: number) => {
         if (editingIndex.value === index) {
-          editingIndex.value = -1;
-        } else {
-          editingIndex.value = index;
-          editForm.value = { ...row };
-        }
-      };
-  
-      const saveEdit = async (original: any) => {
+          // 当前处于编辑状态，点击保存按钮
         try {
           const response = await updateOrder(editForm.value);
           if (response.data === 'success') {
-            Object.assign(original, editForm.value);
+            Object.assign(row, editForm.value); // 直接更新当前行数据
             ElMessage.success('修改成功');
           } else {
             ElMessage.error('修改失败');
           }
         } catch (error) {
           ElMessage.error('修改失败');
-        } finally {
+        }
           editingIndex.value = -1;
+        } else {
+          editingIndex.value = index;
+          editForm.value = { ...row };
         }
       };
   
@@ -257,7 +352,6 @@
             background: 'rgba(0, 0, 0, 0.7)',
           });
           const response = await importOrder(formData);
-          console.log(response);
           
           if (response.status === 200) {
             ElMessage.success(`${response.data}`);
@@ -323,6 +417,12 @@ const fetchCompanies = async () => {
       });
   
       return {
+        paymentFilter,
+        statusStyle,
+        handleRowClass,
+        handleCellStyle,
+        statusFilter,
+        keywordFilter,
         currentPage,
         pageSize,
         total,
@@ -340,7 +440,6 @@ const fetchCompanies = async () => {
         companyOptions,
         salesmanOptions,
         handleEdit,
-        saveEdit,
         handleDelete,
         showAddDialog,
         confirmAdd,
@@ -357,6 +456,57 @@ const fetchCompanies = async () => {
   
  
 <style scoped>
+/* 增加紧凑布局样式 */
+.search-filters {
+  :deep(.el-col) {
+    margin-left: 8px !important;  /* 减小列间距 */
+    &:first-child {
+      margin-left: 0 !important;
+    }
+  }
+
+  .el-select,
+  .el-input,
+  .el-date-editor {
+    width: 100%;
+  }
+
+  .el-date-editor.el-input__wrapper {
+    width: 100%;
+    padding: 0 10px;
+  }
+}
+
+/* 金额异常行样式 */
+:deep(.amount-warning-row) {
+  background-color: #ffe0b2;
+  
+  &:hover > td {
+    background-color: #fff3e0 !important;
+  }
+  
+  & > .el-table__cell {
+    background-color: #ffe0b2;
+  }
+}
+
+/* 优化状态显示 */
+.status-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.uncompleted {
+  background: #ffebee;
+  color: #c62828;
+}
 /* 用户类型选择器样式 */
 .el-select {
   width: 100%;
@@ -413,10 +563,6 @@ const fetchCompanies = async () => {
 
 .toolbar {
   margin-bottom: 15px;
-}
-
-.search-filters {
-  margin: 15px 0;
 }
 
 .upload-demo {

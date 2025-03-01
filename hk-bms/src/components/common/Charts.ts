@@ -8,6 +8,14 @@ export const initBarChart = (element: HTMLElement, data: any) => {
   }
   barChart = echarts.init(element);
   barChart.setOption({
+    tooltip:{
+      trigger: "axis",
+      formatter: (params: any) => {
+        const month = params[0].name; // 获取月份
+        const saleAmount = params[0].value; // 获取销售额
+        return `月份: ${month}<br>销售额: ${saleAmount}`; // 自定义提示框内容
+      }
+    },
     xAxis: {
       name: "月份",
       type: "category",
