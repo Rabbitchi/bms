@@ -9,4 +9,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'), // 将 @ 映射到 src 目录
     },
   },
+  server: {
+    host: '0.0.0.0', // 开发环境运行的主机名
+    port: 3000, // 开发环境运行的端口号
+    open: true, // 启动时自动打开浏览器
+  },
 })

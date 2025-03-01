@@ -9,23 +9,11 @@
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label for="employeeId">员工工号</label>
-          <input 
-            type="text" 
-            id="employeeId" 
-            v-model="employeeId" 
-            placeholder="请输入您的工号"
-            required 
-          />
+          <input type="text" id="employeeId" v-model="employeeId" placeholder="请输入您的工号" required />
         </div>
         <div class="form-group">
           <label for="password">密码</label>
-          <input 
-            type="password" 
-            id="password" 
-            v-model="password"
-            placeholder="请输入您的密码"
-            required 
-          />
+          <input type="password" id="password" v-model="password" placeholder="请输入您的密码" required />
         </div>
         <button type="submit" class="login-btn">登 录</button>
       </form>
@@ -37,6 +25,7 @@
 import { defineComponent, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
+import { baseUrl } from "/public/baseUrl";
 
 export default defineComponent({
   setup() {
@@ -46,7 +35,7 @@ export default defineComponent({
 
     const handleLogin = async () => {
       try {
-        const response = await axios.post('http://localhost:8086/login/common', {
+        const response = await axios.post(`${baseUrl}/login/common`, {
           employeeId: employeeId.value,
           password: password.value,
         });

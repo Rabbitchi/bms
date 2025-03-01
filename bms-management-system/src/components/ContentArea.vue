@@ -15,6 +15,7 @@
           <el-option v-for="year in yearOptions" :key="year" :label="year" :value="year" />
         </el-select>
       </div>
+      <!-- 展示框 -->
       <div class="stats">
         <el-card class="stat-card">
           <h3>总订单数</h3>
@@ -60,18 +61,18 @@
         <el-row :gutter="10" class="search-filters" justify="end">
           <el-col :span="6">
             <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期"
-              style="width: 100%" end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="handleDateChange" />
+              style="width: 100%" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
           </el-col>
           <!-- 公司名称下拉选择 -->
           <el-col :span="4">
-            <el-select v-model="companyFilter" placeholder="公司名称" filterable clearable @change="handleSearch">
+            <el-select v-model="companyFilter" placeholder="公司名称" filterable clearable>
               <el-option v-for="company in companyOptions" :key="company.value" :label="company.label"
                 :value="company.value" />
             </el-select>
           </el-col>
 
           <el-col :span="4">
-            <el-select v-model="salesmanFilter" placeholder="销售员" filterable clearable @change="handleSearch">
+            <el-select v-model="salesmanFilter" placeholder="销售员" filterable clearable>
               <el-option v-for="salesman in salesmanOptions" :key="salesman.value" :label="salesman.label"
                 :value="salesman.value" />
             </el-select>
@@ -85,10 +86,17 @@
 
       <el-card class="table-card">
 
-        <el-table :data="data" border stripe style="width: 100%" v-loading="loading"
+        <el-table :data="orderData" border stripe style="width: 100%" v-loading="loading"
           @selection-change="handleSelectionChange">
           <!-- 复选框列 -->
           <el-table-column type="selection" width="55" align="center" />
+
+          <el-table-column 
+          type="index"
+          :index="(index)=>(currentPage - 1)*pageSize + index + 1"
+          label="序号" 
+          width="60"
+          align="center" />
 
           <template v-for="(value, key) in tableHeaders" :key="key">
 
@@ -124,6 +132,19 @@
       </el-card>
     </div>
 
+    <!-- 用户管理模块新增 -->
+  <div v-else-if="currentView === 'employee-management'">
+    <div class="table-header">
+      <el-button type="primary" @click="showAddUserDialog">新增用户</el-button>
+      <!-- 原有表格内容 -->
+    </div>
+    <el-table :data="data" border stripe style="width: 100%" v-loading="loading">
+        <template v-for="(value, key) in tableHeaders" :key="key">
+          <el-table-column :prop="key" :label="value" sortable min-width="60" />
+        </template>
+      </el-table>
+  </div>
+
     <!-- 其他模块表格展示 -->
     <el-card v-else class="table-card">
       <el-table :data="data" border stripe style="width: 100%" v-loading="loading">
@@ -146,6 +167,28 @@
       </template>
     </el-dialog>
 
+      <!-- 新增用户弹窗 -->
+  <el-dialog v-model="addUserDialogVisible" title="新增用户" width="500px">
+    <el-form :model="newUser" :rules="userFormRules" ref="userForm">
+      <el-form-item label="用户名" prop="employeeName">
+        <el-input v-model="newUser.employeeName" placeholder="请输入2-20位用户名"/>
+      </el-form-item>
+      <el-form-item label="密码" prop="password">
+        <el-input v-model="newUser.password" type="password" placeholder="请输入6-20位密码" show-password/>
+      </el-form-item>
+      <el-form-item label="用户类型" prop="userType">
+        <el-select v-model="newUser.userType" placeholder="请选择用户类型">
+          <el-option label="管理员 (0)" :value="0" />
+          <el-option label="普通用户 (1)" :value="1" />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="addUserDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="confirmAddUser">确认添加</el-button>
+    </template>
+  </el-dialog>
+
   </div>
 </template>
 
@@ -156,6 +199,14 @@ import * as echarts from 'echarts'
 import * as XLSX from 'xlsx'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { ElCard, ElTable, ElTableColumn } from 'element-plus'
+import { baseUrl } from "/public/baseUrl";
+import { 
+  ElForm, 
+  ElFormItem, 
+  ElInput, 
+  ElSelect, 
+  ElOption 
+} from 'element-plus'
 
 // 表头中英文映射配置
 const TABLE_HEADERS_MAP = {
@@ -186,7 +237,6 @@ const TABLE_HEADERS_MAP = {
   },
   // 用户管理
   'employee-management': {
-    id: 'ID',
     employeeId: '员工编号',
     employeeName: '姓名',
     password: '密码',
@@ -195,7 +245,12 @@ const TABLE_HEADERS_MAP = {
 }
 
 export default defineComponent({
-  components: { ElCard, ElTable, ElTableColumn },
+  components: { ElCard, ElTable, ElTableColumn,
+    ElForm,        // 新增
+    ElFormItem,    // 新增
+    ElInput,       // 新增
+    ElSelect,      // 新增
+    ElOption },
   props: {
     currentView: {
       type: String,
@@ -252,12 +307,14 @@ export default defineComponent({
     let pieChart: echarts.ECharts | null = null
 
     // (2)订单管理相关
-
-
-  
-
     const total = ref(0)
+    const orderData = ref<any[]>([])
 
+    const searchQuery = ref('')
+    const dateRange = ref([])
+    const companyFilter = ref('')
+    const salesmanFilter = ref('')
+    const selectedRows = ref<any[]>([])
 
 
     const fetchData = async () => {
@@ -274,7 +331,7 @@ export default defineComponent({
         // 初始化图表
         if (props.currentView === 'sales-overview') {
           const response = await axios.get(
-            `http://localhost:8086/boards/show?year=${selectedYear.value}`
+            `${baseUrl}/boards/show?year=${selectedYear.value}`
           )
           data.value = response.data
           // 等待 DOM 更新完成
@@ -285,13 +342,17 @@ export default defineComponent({
           const params = {
             page: currentPage.value - 1, // 后端页码从0开始
             size: pageSize.value,
+            startDate: dateRange.value[0] ||"",
+            endDate: dateRange.value[1] ||"",
+            company: companyFilter.value,
+            salesman: salesmanFilter.value,
           }
-          const response = await axios.get(`http://localhost:8086/${apiMap[props.currentView]}`, { params })
-          data.value = response.data.page
-          total.value = response.data.pageTotal
+          const response = await axios.get(`${baseUrl}/${apiMap[props.currentView]}`, { params })
+          orderData.value = response.data.records
+          total.value = response.data.total
         } else {
           const response = await axios.get(
-            `http://localhost:8086/${apiMap[props.currentView]}`
+            `${baseUrl}/${apiMap[props.currentView]}`
           )
           data.value = response.data
         }
@@ -386,7 +447,7 @@ export default defineComponent({
     const fetchCompanies = async () => {
 
       try {
-        const response = await axios.get('http://localhost:8086/customer/getNameList');
+        const response = await axios.get(`${baseUrl}/customer/getNameList`);
         companyOptions.value = response.data.map((item: any) => ({
           value: item,
           label: item
@@ -400,7 +461,7 @@ export default defineComponent({
     const fetchSalesmen = async () => {
 
       try {
-        const response = await axios.get('http://localhost:8086/employee/getNameList');
+        const response = await axios.get(`${baseUrl}/employee/getNameList`);
         salesmanOptions.value = response.data.map((item: any) => ({
           value: item,
           label: item
@@ -432,12 +493,6 @@ export default defineComponent({
     const addDialogVisible = ref(false)
     const newOrder = ref<any>({})
 
-    // 分页数据计算
-    // const paginatedData = computed(() => {
-    //   const start = (currentPage.value - 1) * pageSize.value
-    //   const end = start + pageSize.value
-    //   return data.value.slice(start, end)
-    // })
 
     // 编辑操作
     const handleEdit = (row: any, index: number) => {
@@ -452,9 +507,13 @@ export default defineComponent({
     // 保存编辑
     const saveEdit = async (original: any) => {
       try {
-        await axios.put(`http://localhost:8086/order/update`, editForm.value)
+        const response = await axios.post(`${baseUrl}/order/update`, editForm.value)
+        if (response.data === 'success') {
         Object.assign(original, editForm.value)
-        ElMessage.success('修改成功')
+          ElMessage.success('修改成功')
+        }else{
+          ElMessage.error('修改失败')
+        }
       } catch (err) {
         ElMessage.error('修改失败')
       } finally {
@@ -469,9 +528,14 @@ export default defineComponent({
         cancelButtonText: '取消',
         type: 'warning'
       }).then(async () => {
-        await axios.delete(`http://localhost:8086/order/delete?orderId=${row.orderId}`)
-        data.value = data.value.filter((item: any) => item.id !== row.id)
-        ElMessage.success('删除成功')
+        const response = await axios.post(`${baseUrl}/order/delete?orderId=${row.orderId}`)
+        if(response.data === "success"){
+          ElMessage.success('删除成功')
+          fetchData()
+        }else{
+          ElMessage.error('删除失败')
+        }
+        
       })
     }
 
@@ -483,10 +547,14 @@ export default defineComponent({
 
     const confirmAdd = async () => {
       try {
-        await axios.post('http://localhost:8086/order/add', newOrder.value)
-        await fetchData()
+        const response = await axios.post(`${baseUrl}/order/add`, newOrder.value)
+        if (response.data === 'success') {
+          ElMessage.success('添加成功')
+          await fetchData()
         addDialogVisible.value = false
-        ElMessage.success('添加成功')
+        }else{
+          ElMessage.error('添加失败')
+        }
       } catch (err) {
         ElMessage.error('添加失败')
       }
@@ -499,12 +567,7 @@ export default defineComponent({
     }
 
 
-    // 新增搜索状态
-    const searchQuery = ref('')
-    const dateRange = ref([])
-    const companyFilter = ref('')
-    const salesmanFilter = ref('')
-    const selectedRows = ref<any[]>([])
+ 
 
     // 处理复选框选择
     const handleSelectionChange = (val: any[]) => {
@@ -517,48 +580,7 @@ export default defineComponent({
       fetchData()
     }
 
-    // 处理日期筛选
-    const handleDateChange = () => {
-      currentPage.value = 1
-      fetchData()
-    }
 
-    // 计算过滤后的数据
-    const filteredData = computed(() => {
-      return data.value.filter(item => {
-        const matchesSearch = Object.values(item).some(value =>
-          String(value).toLowerCase().includes(searchQuery.value.toLowerCase())
-        )
-
-        const matchesDate = !dateRange.value?.length || (
-          new Date(item.startDate) >= new Date(dateRange.value[0]) &&
-          new Date(item.startDate) <= new Date(dateRange.value[1])
-        )
-
-        const matchesCompany = !companyFilter.value ||
-          item.company?.includes(companyFilter.value)
-
-        const matchesSalesman = !salesmanFilter.value ||
-          item.salesman?.includes(salesmanFilter.value)
-
-        return matchesSearch && matchesDate && matchesCompany && matchesSalesman
-      })
-    })
-
-    // 分页数据（基于过滤后的数据）
-    const filteredPaginatedData = computed(() => {
-      const start = (currentPage.value - 1) * pageSize.value
-      const end = start + pageSize.value
-      return filteredData.value.slice(start, end)
-    })
-
-    // 导出Excel
-    // const handleExport = () => {
-    //   const worksheet = XLSX.utils.json_to_sheet(filteredData.value)
-    //   const workbook = XLSX.utils.book_new()
-    //   XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据')
-    //   XLSX.writeFile(workbook, `订单数据_${new Date().toISOString()}.xlsx`)
-    // }
     const handleExport = async () => {
       try {
         if (selectedRows.value.length > 0) {
@@ -577,7 +599,7 @@ export default defineComponent({
             salesman: salesmanFilter.value
           }
 
-          const response = await axios.get('http://localhost:8086/order/export', {
+          const response = await axios.get(`${baseUrl}/order/export`, {
             params,
             responseType: 'blob' // 关键：指定响应类型为二进制
           })
@@ -612,7 +634,7 @@ export default defineComponent({
           background: 'rgba(0, 0, 0, 0.7)'
         })
 
-        const response = await axios.post('http://localhost:8086/order/import', formData, {
+        const response = await axios.post(`${baseUrl}/order/import`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             // 如果有需要可以添加认证头
@@ -666,17 +688,91 @@ export default defineComponent({
     }
 
 
+    const userName = ref(localStorage.getItem('name') || '用户'); // 从本地存储获取用户名
+
+// 用户管理相关状态
+const addUserDialogVisible = ref(false);
+const newUser = ref({
+  employeeName: '',
+  password: '',
+  userType: null
+});
+// 在setup()顶部添加
+const userForm = ref<any>(null); // 表单引用
+// 表单验证规则
+const userFormRules = {
+  employeeName: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 2, max: 20, message: '长度在2到20个字符', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, max: 20, message: '长度在6到20个字符', trigger: 'blur' }
+  ],
+  userType: [
+    { required: true, message: '请选择用户类型', trigger: 'change' },
+    // { type: 'number', message: '用户类型必须为数字', trigger: 'change' }
+  ]
+};
+
+// 显示新增用户对话框
+const showAddUserDialog = () => {
+  newUser.value = { employeeName: '', password: '', userType: null };
+  addUserDialogVisible.value = true;
+};
+
+// 确认添加用户
+const confirmAddUser = async () => {
+  try {
+    // 表单验证
+     await (userForm.value as any).validate();
+    
+    // 发送请求
+    const response = await axios.post(`${baseUrl}/employee/add`, {
+      employeeName: newUser.value.employeeName,
+      password: newUser.value.password,
+      userType: newUser.value.userType
+    });
+
+    if (response.data === 'success') {
+      ElMessage.success('用户添加成功');
+      addUserDialogVisible.value = false;
+      fetchData(); // 刷新数据
+    } else {
+      ElMessage.error('用户添加失败');
+    }
+  } catch (error) {
+    if (error.response) {
+      // 请求成功但服务器返回错误
+      ElMessage.error(`服务器错误: ${error.response.data.message}`)
+    } else if (error.request) {
+      // 请求未收到响应
+      ElMessage.error('网络连接异常，请检查网络')
+    }
+  }
+};
+
+
+
     return {
+      confirmAddUser,
+      showAddUserDialog,
+      addUserDialogVisible,
+      newUser,
+      userFormRules,
+      data, loading, error, tableHeaders, barChartRef,
+      pieChartRef,
+      total,
+      orderData,
       companyOptions,
       salesmanOptions,
       selectedYear,
       yearOptions,
-      handleYearChange,
-      data, loading, error, tableHeaders, barChartRef,
-      pieChartRef,
-      fetchData,
       currentPage,
       pageSize,
+      handleYearChange,
+      saveEdit,
+      fetchData,
       handleEdit,
       handleDelete,
       editingIndex,
@@ -693,8 +789,6 @@ export default defineComponent({
       selectedRows,
       handleSelectionChange,
       handleSearch,
-      handleDateChange,
-      filteredPaginatedData,
       handleExport,
       beforeImport,
       handleImport,
@@ -705,6 +799,10 @@ export default defineComponent({
 </script>
 
 <style scoped>
+/* 用户类型选择器样式 */
+.el-select {
+  width: 100%;
+}
 /* 新增年份选择器样式 */
 .year-selector {
   display: flex;
