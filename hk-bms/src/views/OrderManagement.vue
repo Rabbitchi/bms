@@ -1,0 +1,512 @@
+<template>
+    <div class="order-management">
+      <div class="table-header">
+        <el-row :gutter="20" class="toolbar" justify="space-between">
+          <el-col :span="16">
+            <div class="button-group">
+              <el-button type="primary" @click="showAddDialog">新增订单</el-button>
+              <el-button @click="handleExport" style="margin-left: 10px">导出Excel</el-button>
+              <el-upload action="" :show-file-list="false" :http-request="handleImport" :before-upload="beforeImport" accept=".xlsx, .xls" style="margin-left: 10px">
+                <el-button type="success">导入Excel</el-button>
+              </el-upload>
+            </div>
+          </el-col>
+        </el-row>
+        <el-row :gutter="10" class="search-filters" justify="end">
+          <el-col :span="6">
+            <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" style="width: 100%" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
+          </el-col>
+          <el-col :span="4">
+            <el-select v-model="companyFilter" placeholder="公司名称" filterable clearable>
+              <el-option v-for="company in companyOptions" :key="company.value" :label="company.label" :value="company.value" />
+            </el-select>
+          </el-col>
+          <el-col :span="4">
+            <el-select v-model="salesmanFilter" placeholder="销售员" filterable clearable>
+              <el-option v-for="salesman in salesmanOptions" :key="salesman.value" :label="salesman.label" :value="salesman.value" />
+            </el-select>
+          </el-col>
+          <el-col :span="3">
+            <el-button type="primary" @click="handleSearch" style="width: 100%">搜索</el-button>
+          </el-col>
+        </el-row>
+      </div>
+      <el-card class="table-card">
+        <el-table :data="orderData" border stripe style="width: 100%" v-loading="loading" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" width="55" align="center" />
+          <el-table-column type="index" :index="(index) => (currentPage - 1) * pageSize + index + 1" label="序号" width="60" align="center" />
+          <template v-for="(value, key) in tableHeaders" :key="key">
+            <el-table-column v-if="key" :prop="key" :label="value" min-width="80">
+              <template #default="{ row, $index }">
+                <template v-if="editingIndex === $index">
+                  <el-input v-model="editForm[key]" @blur="saveEdit(row)" />
+                </template>
+                <span v-else>{{ row[key] }}</span>
+              </template>
+            </el-table-column>
+          </template>
+          <el-table-column label="操作" width="60">
+            <template #default="{ row, $index }">
+              <el-button class="centered-button" size="small" type="success" @click="handleEdit(row, $index)" :icon="editingIndex === $index ? 'Check' : 'Edit'">编辑</el-button>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="60">
+            <template #default="{ row }">
+              <el-button class="centered-button" size="small" type="danger" @click="handleDelete(row)" icon="Delete">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-pagination class="pagination" :current-page="currentPage" :page-size="pageSize" :total="total" @current-change="handlePageChange" layout="prev, pager, next" />
+      </el-card>
+      <el-dialog v-model="addDialogVisible" title="新增订单" width="600px">
+        <el-form :model="newOrder" label-width="100px">
+          <el-form-item v-for="(_, key) in tableHeaders" :key="key" :label="tableHeaders[key]">
+            <el-input v-model="newOrder[key]" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="addDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmAdd">确认添加</el-button>
+        </template>
+      </el-dialog>
+    </div>
+  </template>
+  
+  <script lang="ts">
+  import { defineComponent, ref, onMounted } from 'vue';
+  import { getOrderList, addOrder, updateOrder, deleteOrder, exportOrder, importOrder } from '@/api/order';
+  import { getSalesmanList } from '@/api/employee';
+  import {getCustomerNameList}from "@/api/customer";
+  import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
+  import * as XLSX from 'xlsx';
+  
+  export default defineComponent({
+    name: 'OrderManagement',
+    setup() {
+      const currentPage = ref(1);
+      const pageSize = ref(10);
+      const total = ref(0);
+      const orderData = ref<any[]>([]);
+      const loading = ref(false);
+      const dateRange = ref([]);
+      const companyFilter = ref('');
+      const salesmanFilter = ref('');
+      const selectedRows = ref<any[]>([]);
+      const editingIndex = ref(-1);
+      const editForm = ref<any>({});
+      const addDialogVisible = ref(false);
+      const newOrder = ref<any>({});
+      const companyOptions = ref<{ value: string, label: string }[]>([]);
+      const salesmanOptions = ref<{ value: string, label: string }[]>([]);
+  
+      const tableHeaders = {
+        orderId: '订单编号',
+        startDate: '开始日期',
+        salesman: '销售员',
+        company: '公司名称',
+        item: '项目名称',
+        model: '型号',
+        num: '数量',
+        unit: '单位',
+        expectDate: '预计完成日期',
+        actualDate: '实际完成日期',
+        testResult: '检测结果',
+        remark: '备注',
+        amountReceivable: '应收金额',
+        amountCollected: '实收金额',
+        paymentDate: '付款日期',
+        changeReason: '变更原因',
+        reportId: '报告编号',
+      };
+  
+      const fetchData = async () => {
+        try {
+          loading.value = true;
+          const params = {
+            page: currentPage.value - 1,
+            size: pageSize.value,
+            startDate: dateRange.value[0] || '',
+            endDate: dateRange.value[1] || '',
+            company: companyFilter.value,
+            salesman: salesmanFilter.value,
+          };
+          const response = await getOrderList(params);
+          orderData.value = response.data.records;
+          total.value = response.data.total;
+        } catch (error) {
+          console.error('请求失败:', error);
+        } finally {
+          loading.value = false;
+        }
+      };
+  
+      const handleEdit = (row: any, index: number) => {
+        if (editingIndex.value === index) {
+          editingIndex.value = -1;
+        } else {
+          editingIndex.value = index;
+          editForm.value = { ...row };
+        }
+      };
+  
+      const saveEdit = async (original: any) => {
+        try {
+          const response = await updateOrder(editForm.value);
+          if (response.data === 'success') {
+            Object.assign(original, editForm.value);
+            ElMessage.success('修改成功');
+          } else {
+            ElMessage.error('修改失败');
+          }
+        } catch (error) {
+          ElMessage.error('修改失败');
+        } finally {
+          editingIndex.value = -1;
+        }
+      };
+  
+      const handleDelete = (row: any) => {
+        ElMessageBox.confirm('确认删除该订单？', '警告', {
+          confirmButtonText: '确认',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }).then(async () => {
+          const response = await deleteOrder(row.orderId);
+          if (response.data === 'success') {
+            ElMessage.success('删除成功');
+            fetchData();
+          } else {
+            ElMessage.error('删除失败');
+          }
+        });
+      };
+  
+      const showAddDialog = () => {
+        newOrder.value = {};
+        addDialogVisible.value = true;
+      };
+  
+      const confirmAdd = async () => {
+        try {
+          const response = await addOrder(newOrder.value);
+          if (response.data === 'success') {
+            ElMessage.success('添加成功');
+            await fetchData();
+            addDialogVisible.value = false;
+          } else {
+            ElMessage.error('添加失败');
+          }
+        } catch (error) {
+          ElMessage.error('添加失败');
+        }
+      };
+  
+      const handlePageChange = (val: number) => {
+        currentPage.value = val;
+        fetchData();
+      };
+  
+      const handleSelectionChange = (val: any[]) => {
+        selectedRows.value = val;
+      };
+  
+      const handleSearch = () => {
+        currentPage.value = 1;
+        fetchData();
+      };
+  
+      const handleExport = async () => {
+        try {
+          if (selectedRows.value.length > 0) {
+            const worksheet = XLSX.utils.json_to_sheet(selectedRows.value);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据');
+            XLSX.writeFile(workbook, `选中订单_${new Date().toISOString()}.xlsx`);
+            ElMessage.success('导出成功');
+          } else {
+            const params = {
+              startDate: dateRange.value?.[0],
+              endDate: dateRange.value?.[1],
+              company: companyFilter.value,
+              salesman: salesmanFilter.value,
+            };
+            const response = await exportOrder(params);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `订单导出_${new Date().toISOString()}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            ElMessage.success('导出成功');
+          }
+        } catch (error) {
+          console.error('导出失败:', error);
+          ElMessage.error('导出失败');
+        }
+      };
+  
+      const handleImport = async (options: any) => {
+        let loadingInstance: ReturnType<typeof ElLoading.service> | null = null;
+        try {
+          const formData = new FormData();
+          formData.append('file', options.file);
+          loadingInstance = ElLoading.service({
+            lock: true,
+            text: '正在导入，请稍候...',
+            background: 'rgba(0, 0, 0, 0.7)',
+          });
+          const response = await importOrder(formData);
+          console.log(response);
+          
+          if (response.status === 200) {
+            ElMessage.success(`${response.data}`);
+            await fetchData();
+          } else {
+            ElMessage.error(`${response.data}`);
+          }
+        } catch (error) {
+          console.error('导入失败:', error);
+          ElMessage.error('文件导入失败，请检查文件格式或联系管理员');
+        } finally {
+          if (loadingInstance) {
+            loadingInstance.close();
+          }
+        }
+      };
+  
+      const beforeImport = (file: File) => {
+        const isExcel = file.type.includes('sheet') || ['xlsx', 'xls'].includes(file.name.split('.').pop() || '');
+        const isLt10M = file.size / 1024 / 1024 < 10;
+        if (!isExcel) {
+          ElMessage.error('只能上传Excel文件!');
+          return false;
+        }
+        if (!isLt10M) {
+          ElMessage.error('文件大小不能超过10MB!');
+          return false;
+        }
+        return true;
+      };
+  
+      const fetchSalesmen = async () => {
+        try {
+          const response = await getSalesmanList();
+          salesmanOptions.value = response.data.map((item: any) => ({
+            value: item,
+            label: item,
+          }));
+        } catch (error) {
+          console.error('获取销售员列表失败:', error);
+          ElMessage.error('销售员列表加载失败');
+        }
+      };
+  
+ 
+const fetchCompanies = async () => {
+
+  try {
+    const response = await getCustomerNameList();
+    companyOptions.value = response.data.map((item: any) => ({
+      value: item,
+      label: item
+    }));
+  } catch (err) {
+    console.error('获取公司列表失败:', err)
+    ElMessage.error('公司列表加载失败')
+  }
+}
+      onMounted(() => {
+        fetchData();
+        fetchSalesmen();
+        fetchCompanies();
+      });
+  
+      return {
+        currentPage,
+        pageSize,
+        total,
+        orderData,
+        loading,
+        dateRange,
+        companyFilter,
+        salesmanFilter,
+        selectedRows,
+        editingIndex,
+        editForm,
+        addDialogVisible,
+        newOrder,
+        tableHeaders,
+        companyOptions,
+        salesmanOptions,
+        handleEdit,
+        saveEdit,
+        handleDelete,
+        showAddDialog,
+        confirmAdd,
+        handlePageChange,
+        handleSelectionChange,
+        handleSearch,
+        handleExport,
+        beforeImport,
+        handleImport,
+      };
+    },
+  });
+  </script>
+  
+ 
+<style scoped>
+/* 用户类型选择器样式 */
+.el-select {
+  width: 100%;
+}
+/* 新增年份选择器样式 */
+.year-selector {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+/* 工具条样式 */
+.toolbar {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+}
+
+/* 搜索条件行样式 */
+.filter-row {
+  margin: 15px 0;
+  display: flex;
+  justify-content: flex-end;
+
+  .el-col {
+    margin-left: 10px;
+
+    &:first-child {
+      margin-left: 0;
+    }
+  }
+}
+
+/* 输入框统一样式 */
+.el-input,
+.el-date-editor {
+  width: 100%;
+}
+
+/* 按钮间距调整 */
+.el-button+.el-button {
+  margin-left: 10px;
+}
+
+/* 搜索按钮样式 */
+.search-button {
+  margin-left: 10px;
+}
+
+.toolbar {
+  margin-bottom: 15px;
+}
+
+.search-filters {
+  margin: 15px 0;
+}
+
+.upload-demo {
+  display: inline-block;
+  margin-left: 10px;
+}
+
+.centered-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  /* 确保按钮宽度填满单元格 */
+  box-sizing: border-box;
+  /* 确保padding不会影响宽度 */
+  text-align: center;
+  /* 文本居中 */
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.pagination {
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.content {
+  padding: 20px;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 20px;
+}
+
+.value {
+  font-size: 24px;
+  color: #409EFF;
+  margin-top: 10px;
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.chart-container {
+  height: 400px;
+  /* 必须设置明确高度 */
+  width: 100%;
+}
+
+.chart-card {
+  padding: 20px;
+}
+
+.table-card {
+  margin-top: 20px;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.error {
+  color: #ff4444;
+  padding: 20px;
+  text-align: center;
+}
+</style>
+
+
+  
