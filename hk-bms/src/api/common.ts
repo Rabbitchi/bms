@@ -4,9 +4,9 @@ import { baseUrl } from '../../public/baseUrl';
  const httpClient = axios.create({
   baseURL: baseUrl,
   timeout: 300000,
-  // headers: {
-  //   'Content-Type': 'application/json',
-  // },
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 httpClient.interceptors.request.use(
