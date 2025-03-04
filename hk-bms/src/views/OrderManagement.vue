@@ -145,7 +145,7 @@
 
           <!-- 其他字段保持原样 -->
           <el-form-item 
-          v-if="key !== 'company' && key !== 'salesman' && key !== 'status' && key !== 'startDate' && key !== 'expectDate' && key !== 'actualDate' && key !== 'paymentDate'" 
+          v-if="key !== 'company' && key !== 'salesman' && key !== 'orderId' && key !== 'status' && key !== 'startDate' && key !== 'expectDate' && key !== 'actualDate' && key !== 'paymentDate'" 
           :label="label">
             <el-input v-model="newOrder[key]" />
           </el-form-item>

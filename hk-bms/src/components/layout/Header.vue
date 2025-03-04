@@ -1,6 +1,6 @@
 <template>
   <header class="header">
-    <h1 class="header-title">BMS 管理系统</h1>
+    <h1 class="header-title">HK-BMS 订单管理系统</h1>
     <div class="header-right">
       <div class="user-info">
         <span class="welcome-text">你好，{{ username }}</span>
