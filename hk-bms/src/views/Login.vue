@@ -24,7 +24,6 @@
   <script lang="ts">
   import { defineComponent, ref } from 'vue';
   import { useRouter } from 'vue-router';
-  import axios from 'axios';
   import {getLogin} from "@/api/login"
   
   export default defineComponent({

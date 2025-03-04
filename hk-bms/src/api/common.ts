@@ -7,6 +7,7 @@ import { baseUrl } from '../../public/baseUrl';
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true // 关键配置
 });
 
 httpClient.interceptors.request.use(

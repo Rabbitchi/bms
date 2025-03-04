@@ -24,6 +24,9 @@
         emit('select', index);
       };
   
+      onMounted(() => {
+        handleMenuSelect(activeMenu.value);
+      });
  
       return {
         activeMenu,
@@ -84,4 +87,12 @@
   border-bottom: 1px solid #455672;
 }
   </style>
+
+function mounted() {
+  throw new Error('Function not implemented.');
+}
+
+function mounted() {
+  throw new Error('Function not implemented.');
+}
   
