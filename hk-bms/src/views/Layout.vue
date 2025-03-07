@@ -2,7 +2,7 @@
     <div class="layout-container">
         <Header />
         <div class="main-content">
-            <Sidebar @select="handleSidebarSelect" />
+            <Sidebar />
             <div class="content-area">
                 <router-view></router-view>
             </div>
@@ -16,7 +16,6 @@ import { defineComponent } from 'vue';
 import Header from '@/components/layout/Header.vue';
 import Sidebar from '@/components/layout/Sidebar.vue';
 import Footer from '@/components/layout/Footer.vue';
-import { useRouter } from 'vue-router';
 
 
 export default defineComponent({
@@ -25,18 +24,7 @@ export default defineComponent({
         Header,
         Sidebar,
         Footer,
-    },
-    setup() {
-        const router = useRouter();
-
-        const handleSidebarSelect = (view: string) => {
-            console.log(view);
-            router.push(`/${view}`);
-        };
-        return {
-            handleSidebarSelect,
-        };
-    },
+    }
 });
 </script>
 

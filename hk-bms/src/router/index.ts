@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHashHistory } from 'vue-router';
 import Login from '@/views/Login.vue';
 import Layout from '@/views/Layout.vue';
 import SalesOverview from '@/views/SalesOverview.vue';
@@ -12,16 +12,16 @@ const routes = [
   {
     path: '/layout', component: Layout,
     children: [
-      { path: '/sales-overview', component: SalesOverview },
-      { path: '/order-management', component: OrderManagement },
-      { path: '/employee-management', component: EmployeeManagement },
-      { path: '/customer-management', component: CustomerManagement },
+      { path: 'sales-overview', component: SalesOverview },
+      { path: 'order-management', component: OrderManagement },
+      { path: 'employee-management', component: EmployeeManagement },
+      { path: 'customer-management', component: CustomerManagement },
     ]
   }
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
 });
 

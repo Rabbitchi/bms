@@ -1,43 +1,45 @@
 <template>
-    <div class="sidebar">
-      <el-menu :default-active="activeMenu" @select="handleMenuSelect">
-        <el-menu-item index="sales-overview">销售概况</el-menu-item>
-        <el-menu-item index="order-management">订单管理</el-menu-item>
-        <el-menu-item index="employee-management">员工管理</el-menu-item>
-        <el-menu-item index="customer-management">客户管理</el-menu-item>
-      </el-menu>
-    </div>
-  </template>
-  
-  <script lang="ts">
-  import { defineComponent, ref, onMounted } from 'vue';
-  
-  export default defineComponent({
-    name: 'Sidebar',
-    emits: ['select'],
-    setup(props, { emit }) {
-      const activeMenu = ref(localStorage.getItem('activeMenu') || 'sales-overview');
-  
-      const handleMenuSelect = (index: string) => {
-        activeMenu.value = index; 
-         localStorage.setItem('activeMenu', index);
-        emit('select', index);
-      };
-  
-      onMounted(() => {
-        handleMenuSelect(activeMenu.value);
-      });
- 
-      return {
-        activeMenu,
-        handleMenuSelect,
-      };
-    },
-  });
-  </script>
-  
-  <style scoped>
-  .sidebar {
+  <div class="sidebar">
+    <el-menu :default-active="activeMenu" @select="handleMenuSelect">
+      <el-menu-item index="/layout/sales-overview">销售概况</el-menu-item>
+      <el-menu-item index="/layout/order-management">订单管理</el-menu-item>
+      <el-menu-item index="/layout/employee-management">员工管理</el-menu-item>
+      <el-menu-item index="/layout/customer-management">客户管理</el-menu-item>
+    </el-menu>
+  </div>
+</template>
+
+<script lang="ts">
+import { defineComponent, ref, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+export default defineComponent({
+  name: 'Sidebar',
+  emits: ['select'],
+  setup() {
+    const activeMenu = ref('/sales-overview');
+    const router = useRouter();
+    const route = useRoute();
+    activeMenu.value = route.path;
+
+    const handleMenuSelect = (index: string) => {
+      activeMenu.value = index;
+      router.push(index);
+    };
+
+    onMounted(() => {
+      handleMenuSelect(activeMenu.value);
+    });
+
+    return {
+      activeMenu,
+      handleMenuSelect,
+    };
+  },
+});
+</script>
+
+<style scoped>
+.sidebar {
   width: 200px;
   height: 100%;
   background-color: #304156;
@@ -86,13 +88,12 @@
 :deep(.el-menu-item:not(:last-child)) {
   border-bottom: 1px solid #455672;
 }
-  </style>
+</style>
 
 function mounted() {
-  throw new Error('Function not implemented.');
+throw new Error('Function not implemented.');
 }
 
 function mounted() {
-  throw new Error('Function not implemented.');
+throw new Error('Function not implemented.');
 }
-  
