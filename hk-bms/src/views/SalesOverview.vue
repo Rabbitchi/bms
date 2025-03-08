@@ -9,22 +9,22 @@
       <!-- 展示框 -->
       <div class="stats">
         <el-card class="stat-card">
-          <h3>总订单数</h3>
+          <h3>年度总订单数</h3>
           <div class="value">{{ data.orderTotalNum?data.orderTotalNum: null }}</div>
         </el-card>
         <el-card class="stat-card">
-          <h3>总销售额</h3>
+          <h3>年度总销售额</h3>
           <div class="value">¥{{ data.orderTotalAmount?data.orderTotalAmount.toFixed(2): null }}</div>
         </el-card>
       </div>
        <!-- 图表 -->
       <div class="charts">
         <el-card class="chart-card">
-          <h4>月度销售趋势</h4>
+          <h4>年度月销售变化趋势</h4>
           <div ref="barChartRef" class="chart-container"></div>
         </el-card>
         <el-card class="chart-card">
-          <h4>销售员业绩分布</h4>
+          <h4>销售员年度业绩分布</h4>
           <div ref="pieChartRef" class="chart-container"></div>
         </el-card>
       </div>
