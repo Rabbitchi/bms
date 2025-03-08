@@ -1,86 +1,114 @@
-import * as echarts from "echarts";
-let barChart: echarts.ECharts | null = null;
+// src/components/common/Charts.ts
+import * as echarts from 'echarts';
+import type { ECharts } from 'echarts';
 
-export const initBarChart = (element: HTMLElement, data: any) => {
-  if (barChart) {
-    barChart.dispose();
-    barChart = null;
-  }
-  barChart = echarts.init(element);
-  barChart.setOption({
-    tooltip:{
-      trigger: "axis",
+// 初始化趋势图表（带点击事件）
+export const initTrendChart = (
+  dom: HTMLElement | null, 
+  barCharts: any[],
+  clickHandler?: (month: number) => void
+): ECharts | null => {
+  if (!dom) return null;
+  
+  const chart = echarts.init(dom);
+  const option = {
+    tooltip: {
+      trigger: 'axis',
       formatter: (params: any) => {
-        const month = params[0].name; // 获取月份
-        const saleAmount = params[0].value; // 获取销售额
-        return `月份: ${month}<br>销售额: ${saleAmount}`; // 自定义提示框内容
+        const item = params[0];
+        return `月份：${item.data.month}<br/>
+               订单数：${item.data.orderCount}<br/>
+               销售额：¥${item.data.saleAmount.toFixed(2)}`;
       }
     },
     xAxis: {
-      name: "月份",
-      type: "category",
-      data: data.barCharts.map((item: any) => item.month),
+      type: 'category',
+      data: barCharts.map(item => `${item.month}月`)
     },
-    yAxis: {
-      name: "销售额",
-      type: "value",
-    },
-    series: [
-      {
-        data: data.barCharts.map((item: any) => item.saleAmount),
-        type: "line",
+    yAxis: { type: 'value' },
+    series: [{
+      type: 'bar',
+      data: barCharts.map(item => ({
+        value: item.saleAmount,
+        orderCount: item.orderCount,
+        name: item.month
+      })),
+      label: {
+        show: true,
+        position: 'top',
+        formatter: (params: any) => `¥${params.value.toFixed(2)}`
       },
-    ],
-  });
-  return barChart;
-};
-let pieChart: echarts.ECharts | null = null;
-export const initPieChart = (element: HTMLElement, data: any) => {
-  if (pieChart) {
-    pieChart.dispose();
-    pieChart = null;
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: '#83bff6' },
+          { offset: 1, color: '#188df0' }
+        ])
+      }
+    }]
+  };
+
+  chart.setOption(option);
+
+ // 绑定点击事件
+ chart.on('click', (params: any) => {
+  if (params.componentType === 'series') {
+    const month = parseInt(params.name);
+    clickHandler?.(month);
   }
-  pieChart = echarts.init(element);
-  pieChart.setOption({
-    color: [
-      "#3398DB",
-      "#FF9900",
-      "#1E90FF",
-      "#FF4500",
-      "#FF8C00",
-      "#B8860B",
-      "#CD5C5C",
-      "#483D8B",
-    ],
-    title: {
-      text: "销售员业绩分布",
-      left: "center",
-    },
+});
+
+  return chart;
+}
+
+// 初始化饼图
+export const initPieChart = (
+  dom: HTMLElement | null,
+  pieCharts: any[],
+  orderTotalAmount: number,
+  orderTotalNum: number
+): ECharts | null => {
+  if (!dom) return null;
+
+  const chart = echarts.init(dom);
+  const option = {
     tooltip: {
-      trigger: "item",
+      trigger: 'item',
+      formatter: ({ data }: any) => 
+        `${data.saleName}<br/>
+         销售额：¥${orderTotalAmount.toFixed(2)}<br/>
+         占比：${((data.value / orderTotalAmount) * 100).toFixed(2)}%<br/>
+         订单数：${orderTotalNum}<br/>` 
     },
-    legend: {
-      orient: "vertical",
-      left: "left",
-    },
-    series: [
-      {
-        name: "销售额",
-        type: "pie",
-        radius: "50%",
-        data: data.pieCharts.map((item: any) => ({
-          name: item.saleName,
-          value: item.orderAmount,
-        })),
-        emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: "rgba(0, 0, 0, 0.5)",
-          },
-        },
+    series: [{
+      type: 'pie',
+      radius: ['50%', '80%'],
+      data: pieCharts.map(item => ({
+        name: item.saleName,
+        value: item.orderAmount,
+        orderNum: item.orderNum
+      })),
+      label: {
+        show: true,
+        formatter: ({ name, percent }: any) => 
+          `${name}\n${percent}%`,  // 显示名称和百分比
+        position: 'outside',
+        alignTo: 'edge',
+        margin: 20
       },
-    ],
-  });
-  return pieChart;
-};
+      emphasis: {
+        label: {
+          show: true,
+          fontSize: '16'
+        },
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }]
+  };
+
+  chart.setOption(option);
+  return chart;
+}
