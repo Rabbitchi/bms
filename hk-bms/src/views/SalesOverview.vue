@@ -13,19 +13,19 @@
     <!-- 核心指标看板 -->
     <div class="metric-board">
       <el-card class="metric-card">
-        <div class="metric-title">年度总订单数</div>
+        <div class="metric-title">{{ selectedYear }}年总订单数</div>
         <div class="metric-value">{{ annualData.orderTotalNum || '--' }}</div>
       </el-card>
       <el-card class="metric-card">
-        <div class="metric-title">年度总销售额</div>
+        <div class="metric-title">{{ selectedYear }}年总销售额</div>
         <div class="metric-value">¥{{ annualData.orderTotalAmount?.toFixed(2) || '--' }}</div>
       </el-card>
       <el-card class="metric-card">
-        <div class="metric-title">月度订单数</div>
+        <div class="metric-title">{{ selectedMonth }}月订单数</div>
         <div class="metric-value highlight">{{ monthlyData.orderTotalNum || '--' }}</div>
       </el-card>
       <el-card class="metric-card">
-        <div class="metric-title">月度销售额</div>
+        <div class="metric-title">{{ selectedMonth }}月销售额</div>
         <div class="metric-value highlight">¥{{ monthlyData.orderTotalAmount?.toFixed(2) || '--' }}</div>
       </el-card>
     </div>
@@ -36,13 +36,13 @@
       <el-card class="main-chart">
         <h4>{{ selectedYear }}年销售趋势</h4>
         <div class="chart-tips">点击柱子查看当月详情</div>
-        <div ref="trendChartRef" class="chart-content"></div>
+        <div ref="trendChartRef" class="chartBar-content"></div>
       </el-card>
 
       <!-- 销售分布 -->
       <div class="side-charts">
         <el-card class="distribution-chart">
-          <h4>年度销售分布</h4>
+          <h4>{{ selectedYear }}年销售分布</h4>
           <div ref="annualPieRef" class="chart-content"></div>
         </el-card>
         <el-card class="distribution-chart">
@@ -326,9 +326,15 @@ onBeforeUnmount(() => {
 
 .chart-content {
   height: 100%;
-  min-height: 300px; /* 添加最小高度保障 */
+  min-height: 200px; /* 添加最小高度保障 */
 }
-
+.chartBar-content {
+  height: 100%;
+  min-height: 400px; /* 添加最小高度保障 */
+}
+h4{
+  margin: 1px;
+}
 .chart-tips {
   color: #909399;
   font-size: 12px;

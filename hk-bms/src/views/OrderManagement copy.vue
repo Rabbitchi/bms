@@ -69,9 +69,17 @@
           align="center" />
 
         <template v-for="(value, key) in tableHeaders" :key="key">
+          <!-- <el-table-column v-if="key !== 'status' && key" :prop="key" :label="value" min-width="80">
+            <template #default="{ row, $index }">
+              
+              <template v-if="editingIndex === $index">
+                <el-input v-model="editForm[key]" />
+              </template>
+              <span v-else>{{ row[key] }}</span>
+            </template>
+          </el-table-column> -->
 
-
-          <el-table-column :prop="key" :label="value"  max-width="300" min-width="60">
+          <el-table-column :prop="key" :label="value" min-width="80">
             <template #default="{ row, $index }">
               <!-- 可编辑单元格 -->
               <div v-if="editingCell?.rowIndex === $index && editingCell?.colKey === key" class="cell-edit">
@@ -94,19 +102,27 @@
             </template>
           </el-table-column>
 
+
+
         </template>
 
         <!-- 状态列 -->
-        <!-- <el-table-column prop="status" label="完成状态">
+        <el-table-column prop="status" label="完成状态">
           <template #default="{ row, $index }">
             <template v-if="editingIndex === $index">
               <el-input v-model="editForm.status" />
             </template>
             <span v-else :style="statusStyle(row.status)">{{ row.status }}</span>
           </template>
+        </el-table-column>
+
+        <!-- 操作列 -->
+        <!-- <el-table-column label="操作" width="60">
+          <template #default="{ row, $index }">
+            <el-button class="centered-button" size="small" type="success" @click="handleEdit(row, $index)"
+              :icon="editingIndex === $index ? 'Check' : 'Edit'">{{ editingIndex === $index ? '保存' : '编辑' }}</el-button>
+          </template>
         </el-table-column> -->
-
-
         <el-table-column label="操作" width="60">
           <template #default="{ row }">
             <el-button class="centered-button" size="small" type="danger" @click="handleDelete(row)"
@@ -209,17 +225,6 @@ import * as XLSX from 'xlsx';
     const paymentFilter = ref('');
 
     //编辑列新逻辑
-
-    const calculateColumnWidth = (key: string) => {
-  // 获取该列的最大文字长度
-  const maxLength = Math.max(...orderData.value.map(row => String(row[key]).length));
-  
-  // 根据文字长度计算宽度，最小30px，最大100px
-  const baseWidth = maxLength * 12; // 假设每个字符大约占10px
-  return Math.min(Math.max(baseWidth, 90),450);
-};
-
-
     interface EditingCell {
   rowIndex: number;
   colKey: string;
@@ -550,20 +555,21 @@ const getDatePlaceholder = (key: string) => {
   right: 0;
   top: 0;
   bottom: 0;
-  padding: 2px;
+  padding: 8px 15px;
   background: white;
   z-index: 2;
 }
 
 .cell-edit :deep(.el-input__wrapper) {
   height: 100%;
-  padding: 0px;
+  padding: 0 8px;
 }
+
 .cell-content {
   width: 100%;
   height: 100%;
-  min-height: 26px;
-  padding: 0px;
+  min-height: 28px;
+  padding: 8px 15px;
   cursor: cell;
 }
 /* 表单项提示 */

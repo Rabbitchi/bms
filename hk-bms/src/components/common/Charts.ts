@@ -16,9 +16,9 @@ export const initTrendChart = (
       trigger: 'axis',
       formatter: (params: any) => {
         const item = params[0];
-        return `月份：${item.data.month}<br/>
+        return `月份：${item.data.name}<br/>
                订单数：${item.data.orderCount}<br/>
-               销售额：¥${item.data.saleAmount.toFixed(2)}`;
+               销售额：¥${item.data.value.toFixed(2)}`;
       }
     },
     xAxis: {
@@ -74,27 +74,33 @@ export const initPieChart = (
     tooltip: {
       trigger: 'item',
       formatter: ({ data }: any) => 
-        `${data.saleName}<br/>
-         销售额：¥${orderTotalAmount.toFixed(2)}<br/>
+        `业务员：${data.name}<br/>
+         销售额：¥${data.value.toFixed(2)}<br/>
          占比：${((data.value / orderTotalAmount) * 100).toFixed(2)}%<br/>
-         订单数：${orderTotalNum}<br/>` 
+         订单数：${data.orderNum}<br/>` 
+    },
+    legend:{
+      orient:'vertical',
+      left:20,
+      top:'center',
+      itemGap:15,
+      formatter: (name: string) => {
+        const data = pieCharts.find(item => item.saleName === name);
+        return data?`${name} ￥${data.orderAmount.toFixed(2)} `:name;
+     },
+     textStyle:{
+      fontSize:12,
+       color:'#666'
+     }
     },
     series: [{
       type: 'pie',
-      radius: ['50%', '80%'],
+      radius:  '70%',
       data: pieCharts.map(item => ({
         name: item.saleName,
         value: item.orderAmount,
         orderNum: item.orderNum
       })),
-      label: {
-        show: true,
-        formatter: ({ name, percent }: any) => 
-          `${name}\n${percent}%`,  // 显示名称和百分比
-        position: 'outside',
-        alignTo: 'edge',
-        margin: 20
-      },
       emphasis: {
         label: {
           show: true,
