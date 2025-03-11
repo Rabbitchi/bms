@@ -71,19 +71,18 @@
         <template v-for="(value, key) in tableHeaders" :key="key">
 
 
-          <el-table-column :prop="key" :label="value"  max-width="300" min-width="60">
+          <el-table-column :prop="key" :label="value" max-width="300" min-width="60">
             <template #default="{ row, $index }">
               <!-- 可编辑单元格 -->
-              <div v-if="editingCell?.rowIndex === $index && editingCell?.colKey === key" class="cell-edit">
-                <el-input 
-                  v-model="editForm[key]" 
-                  @blur="handleCellBlur(row)"
-                  v-focus
-                  size="small"
-                />
+              <div v-if="editingCell?.rowIndex === $index && editingCell?.colKey === key" 
+              class="cell-edit"
+              >
+                <el-input v-model="editForm[key]" @blur="handleCellBlur(row)" type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 30 }" v-focus class="cell-textarea" />
               </div>
               <!-- 显示内容 -->
               <div v-else class="cell-content" @dblclick.stop="handleCellDblClick(row, $index, key, $event)">
+                <div class="height-measure">{{ row[key] }}</div>
                 <template v-if="key === 'status'">
                   <span :style="statusStyle(row.status)">{{ row.status }}</span>
                 </template>
@@ -95,16 +94,6 @@
           </el-table-column>
 
         </template>
-
-        <!-- 状态列 -->
-        <!-- <el-table-column prop="status" label="完成状态">
-          <template #default="{ row, $index }">
-            <template v-if="editingIndex === $index">
-              <el-input v-model="editForm.status" />
-            </template>
-            <span v-else :style="statusStyle(row.status)">{{ row.status }}</span>
-          </template>
-        </el-table-column> -->
 
 
         <el-table-column label="操作" width="60">
@@ -155,9 +144,9 @@
           </el-form-item>
 
           <!-- 其他字段保持原样 -->
-          <el-form-item 
-          v-if="key !== 'company' && key !== 'salesman' && key !== 'orderId' && key !== 'status' && key !== 'startDate' && key !== 'expectDate' && key !== 'actualDate' && key !== 'paymentDate'" 
-          :label="label">
+          <el-form-item
+            v-if="key !== 'company' && key !== 'salesman' && key !== 'orderId' && key !== 'status' && key !== 'startDate' && key !== 'expectDate' && key !== 'actualDate' && key !== 'paymentDate'"
+            :label="label">
             <el-input v-model="newOrder[key]" />
           </el-form-item>
 
@@ -174,67 +163,86 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount,nextTick } from 'vue';
 import { getOrderList, addOrder, updateOrder, deleteOrder, exportOrder, importOrder } from '@/api/order';
 import { getSalesmanList } from '@/api/employee';
 import { getCustomerNameList } from "@/api/customer";
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import * as XLSX from 'xlsx';
 
-    const currentPage = ref(1);
-    const pageSize = ref(10);
-    const total = ref(0);
-    const orderData = ref<any[]>([]);
-    const loading = ref(false);
-    const dateRange = ref([]);
-    const companyFilter = ref('');
-    const salesmanFilter = ref('');
-    const selectedRows = ref<any[]>([]);
-    const editingIndex = ref(-1);
-  
-    const addDialogVisible = ref(false);
-    const newOrder = ref<any>({
-      status: '未完成',
-      orderId: '',         // 必填项
-      startDate: '',       // 必填
-      expectDate: '',      // 必填
-      actualDate: null,    // 可选
-      paymentDate: null    // 可选
-    });
-    const companyOptions = ref<{ value: string, label: string }[]>([]);
-    const salesmanOptions = ref<{ value: string, label: string }[]>([]);
+const currentPage = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const orderData = ref<any[]>([]);
+const loading = ref(false);
+const dateRange = ref([]);
+const companyFilter = ref('');
+const salesmanFilter = ref('');
+const selectedRows = ref<any[]>([]);
 
-    const statusFilter = ref('all');
-    const keywordFilter = ref('');
-    const paymentFilter = ref('');
+const addDialogVisible = ref(false);
+const newOrder = ref<any>({
+  status: '未完成',
+  orderId: '',         // 必填项
+  startDate: '',       // 必填
+  expectDate: '',      // 必填
+  actualDate: null,    // 可选
+  paymentDate: null    // 可选
+});
+const companyOptions = ref<{ value: string, label: string }[]>([]);
+const salesmanOptions = ref<{ value: string, label: string }[]>([]);
 
-    //编辑列新逻辑
-
-    const calculateColumnWidth = (key: string) => {
-  // 获取该列的最大文字长度
-  const maxLength = Math.max(...orderData.value.map(row => String(row[key]).length));
-  
-  // 根据文字长度计算宽度，最小30px，最大100px
-  const baseWidth = maxLength * 12; // 假设每个字符大约占10px
-  return Math.min(Math.max(baseWidth, 90),450);
-};
+const statusFilter = ref('all');
+const keywordFilter = ref('');
+const paymentFilter = ref('');
 
 
-    interface EditingCell {
+
+interface EditingCell {
   rowIndex: number;
   colKey: string;
 }
 const editingCell = ref<EditingCell | null>(null);
 const editForm = ref<any>({});
 // 双击单元格处理
-const handleCellDblClick = (row: any, rowIndex: number, columnKey: string) => {
+const handleCellDblClick = (row: any, rowIndex: number, columnKey: string, event: MouseEvent) => {
   // 过滤不可编辑列
   const unEditableColumns = ['selection', 'index', '操作'];
   if (unEditableColumns.includes(columnKey)) return;
 
   editingCell.value = { rowIndex, colKey: columnKey };
   editForm.value = { ...row };
+
+   // 获取单元格高度
+   nextTick(() => {
+    // const measureDiv = (event.currentTarget as HTMLElement).querySelector('.height-measure');
+    // if (measureDiv) {
+    //   const computedStyle = window.getComputedStyle(measureDiv);
+    //   const lineHeight = parseInt(computedStyle.lineHeight);
+    //   const padding = parseInt(computedStyle.paddingTop) + parseInt(computedStyle.paddingBottom);
+      
+    //   // 计算实际内容高度
+    //   const contentHeight = Math.max(
+    //     measureDiv.scrollHeight,
+    //     lineHeight + padding
+    //   );
+      
+    //   editForm.value._cellHeight = `${contentHeight}px`;
+    // }
+
+    const cellContent = (event.currentTarget as HTMLElement).querySelector('.cell-content');
+    if (cellContent) {
+      const cellHeight = cellContent.clientHeight;
+      editForm.value._cellHeight = `${cellHeight}px`;
+    }
+
+
+  });
+
+
 };
+
+
 // 失焦保存处理
 const handleCellBlur = async (originalRow: any) => {
   if (!editingCell.value) return;
@@ -256,13 +264,14 @@ const handleCellBlur = async (originalRow: any) => {
     ElMessage.error('修改保存失败');
   } finally {
     editingCell.value = null;
+    editForm.value._cellHeight = null; // 清除高度
   }
 };
 // 自定义自动聚焦指令
 const vFocus = {
   mounted: (el: HTMLElement) => el.querySelector('input')?.focus()
 };
-    // 在setup中添加日期字段判断方法
+// 在setup中添加日期字段判断方法
 const isDateField = (key: string) => {
   return ['startDate', 'expectDate', 'actualDate', 'paymentDate'].includes(key);
 };
@@ -277,295 +286,345 @@ const getDatePlaceholder = (key: string) => {
   return map[key] || '选择日期';
 };
 
-    const tableHeaders = {
-      orderId: '订单编号',
-      startDate: '开始日期',
-      salesman: '销售员',
-      company: '公司名称',
-      item: '项目名称',
-      model: '型号',
-      num: '数量',
-      unit: '单位',
-      expectDate: '预计完成日期',
-      actualDate: '实际完成日期',
-      testResult: '检测结果',
-      remark: '备注',
-      amountReceivable: '应收金额',
-      amountCollected: '实收金额',
-      paymentDate: '付款日期',
-      changeReason: '变更原因',
-      status: '完成状态',
+const tableHeaders = {
+  orderId: '订单编号',
+  startDate: '开始日期',
+  salesman: '销售员',
+  company: '公司名称',
+  item: '项目名称',
+  model: '型号',
+  num: '数量',
+  unit: '单位',
+  expectDate: '预计完成日期',
+  actualDate: '实际完成日期',
+  testResult: '检测结果',
+  remark: '备注',
+  amountReceivable: '应收金额',
+  amountCollected: '实收金额',
+  paymentDate: '付款日期',
+  changeReason: '变更原因',
+  status: '完成状态',
+};
+
+// 完成状态样式
+const statusStyle = (status: string) => {
+  const style: any = {
+    padding: '4px 8px',
+    borderRadius: '4px',
+    display: 'inline-block'
+  }
+
+  if (status === '已完成') {
+    style.backgroundColor = '#e8f5e9';
+    style.color = '#2e7d32';
+  } else if (status === '未完成') {
+    style.backgroundColor = '#ffebee';
+    style.color = '#c62828';
+  }
+  return style;
+}
+
+// 统一单元格样式
+const handleCellStyle = ({ column }: { column: any, row: any }) => {
+  if (column.property === 'status') {
+    return { padding: '4px' };
+  }
+  return {};
+}
+
+
+
+// 未付款高亮
+const handleRowClass = ({ row }: { row: any }) => {
+  if (row.amountReceivable > row.amountCollected) {
+    return 'amount-warning-row';
+  }
+  return '';
+}
+
+const fetchData = async () => {
+  try {
+    loading.value = true;
+    const params = {
+      page: currentPage.value - 1,
+      size: pageSize.value,
+      startDate: dateRange.value[0] || '',
+      endDate: dateRange.value[1] || '',
+      company: companyFilter.value,
+      salesman: salesmanFilter.value,
+      status: statusFilter.value || "all",
+      keyword: keywordFilter.value,
+      paymentStatus: paymentFilter.value || ''
     };
+    console.log('请求参数:', params);
 
-    // 完成状态样式
-    const statusStyle = (status: string) => {
-      const style: any = {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        display: 'inline-block'
-      }
+    const response = await getOrderList(params);
+    orderData.value = response.data.records;
+    total.value = response.data.total;
+  } catch (error) {
+    console.error('请求失败:', error);
+  } finally {
+    loading.value = false;
+  }
+};
 
-      if (status === '已完成') {
-        style.backgroundColor = '#e8f5e9';
-        style.color = '#2e7d32';
-      } else if (status === '未完成') {
-        style.backgroundColor = '#ffebee';
-        style.color = '#c62828';
-      }
-      return style;
-    }
+// 点击外部区域处理
+const clickOutsideHandler = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  // 判断点击是否在编辑单元格内
+  const isInside = document.querySelector('.cell-edit')?.contains(target)
 
-    // 统一单元格样式
-    const handleCellStyle = ({ column, row }: { column: any, row: any }) => {
-      if (column.property === 'status') {
-        return { padding: '4px' };
-      }
-      return {};
-    }
+  if (editingCell.value && !isInside) {
+    handleCellBlur(orderData.value[editingCell.value.rowIndex])
+  }
+}
 
 
 
-    // 未付款高亮
-    const handleRowClass = ({ row }: { row: any }) => {
-      if (row.amountReceivable > row.amountCollected) {
-        return 'amount-warning-row';
-      }
-      return '';
-    }
-
-    const fetchData = async () => {
-      try {
-        loading.value = true;
-        const params = {
-          page: currentPage.value - 1,
-          size: pageSize.value,
-          startDate: dateRange.value[0] || '',
-          endDate: dateRange.value[1] || '',
-          company: companyFilter.value,
-          salesman: salesmanFilter.value,
-          status: statusFilter.value || "all",
-          keyword: keywordFilter.value,
-          paymentStatus: paymentFilter.value || ''
-        };
-        console.log('请求参数:', params);
-
-        const response = await getOrderList(params);
-        orderData.value = response.data.records;
-        total.value = response.data.total;
-      } catch (error) {
-        console.error('请求失败:', error);
-      } finally {
-        loading.value = false;
-      }
-    };
- //编辑列
-    // const handleEdit = async (row: any, index: number) => {
-    //   if (editingIndex.value === index) {
-    //     // 当前处于编辑状态，点击保存按钮
-    //     try {
-    //       const response = await updateOrder(editForm.value);
-    //       if (response.data === 'success') {
-    //         Object.assign(row, editForm.value); // 直接更新当前行数据
-    //         ElMessage.success('修改成功');
-    //       } else {
-    //         ElMessage.error('修改失败');
-    //       }
-    //     } catch (error) {
-    //       ElMessage.error('修改失败');
-    //     }
-    //     editingIndex.value = -1;
-    //   } else {
-    //     editingIndex.value = index;
-    //     editForm.value = { ...row };
-    //   }
-    // };
-   //删除订单列
-    const handleDelete = (row: any) => {
-      ElMessageBox.confirm('确认删除该订单？', '警告', {
-        confirmButtonText: '确认',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }).then(async () => {
-        const response = await deleteOrder(row.orderId);
-        if (response.data === 'success') {
-          ElMessage.success('删除成功');
-          fetchData();
-        } else {
-          ElMessage.error('删除失败');
-        }
-      });
-    };
-
-    const showAddDialog = () => {
-      newOrder.value = { status: '未完成' };
-      addDialogVisible.value = true;
-    };
-
-    const confirmAdd = async () => {
-      try {
-        const response = await addOrder(newOrder.value);
-        if (response.data === 'success') {
-          ElMessage.success('添加成功');
-          await fetchData();
-          addDialogVisible.value = false;
-        } else {
-          ElMessage.error('添加失败');
-        }
-      } catch (error) {
-        ElMessage.error('添加失败');
-      }
-    };
-
-
-    //  导入导出功能
-    const handleExport = async () => {
-      try {
-        if (selectedRows.value.length > 0) {
-          const worksheet = XLSX.utils.json_to_sheet(selectedRows.value);
-          const workbook = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据');
-          XLSX.writeFile(workbook, `选中订单_${new Date().toISOString()}.xlsx`);
-          ElMessage.success('导出成功');
-        } else {
-          const params = {
-            startDate: dateRange.value?.[0],
-            endDate: dateRange.value?.[1],
-            company: companyFilter.value,
-            salesman: salesmanFilter.value,
-            status: statusFilter.value,
-            keyword: keywordFilter.value,
-            paymentStatus: paymentFilter.value
-          };
-          const response = await exportOrder(params);
-          const url = window.URL.createObjectURL(new Blob([response.data]));
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute('download', `订单导出_${new Date().toISOString()}.xlsx`);
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          ElMessage.success('导出成功');
-        }
-      } catch (error) {
-        console.error('导出失败:', error);
-        ElMessage.error('导出失败');
-      }
-    };
-
-    const handleImport = async (options: any) => {
-      let loadingInstance: ReturnType<typeof ElLoading.service> | null = null;
-      try {
-        const formData = new FormData();
-        formData.append('file', options.file);
-        loadingInstance = ElLoading.service({
-          lock: true,
-          text: '正在导入，请稍候...',
-          background: 'rgba(0, 0, 0, 0.7)',
-        });
-        const response = await importOrder(formData);
-
-        if (response.status === 200) {
-          ElMessage.success(`${response.data}`);
-          await fetchData();
-        } else {
-          ElMessage.error(`${response.data}`);
-        }
-      } catch (error) {
-        console.error('导入失败:', error);
-        ElMessage.error('文件导入失败，请检查文件格式或联系管理员');
-      } finally {
-        if (loadingInstance) {
-          loadingInstance.close();
-        }
-      }
-    };
-
-    const beforeImport = (file: File) => {
-      const isExcel = file.type.includes('sheet') || ['xlsx', 'xls'].includes(file.name.split('.').pop() || '');
-      const isLt10M = file.size / 1024 / 1024 < 10;
-      if (!isExcel) {
-        ElMessage.error('只能上传Excel文件!');
-        return false;
-      }
-      if (!isLt10M) {
-        ElMessage.error('文件大小不能超过10MB!');
-        return false;
-      }
-      return true;
-    };
-   //搜索条件下拉框数据
-    const fetchSalesmen = async () => {
-      try {
-        const response = await getSalesmanList();
-        salesmanOptions.value = response.data.map((item: any) => ({
-          value: item,
-          label: item,
-        }));
-      } catch (error) {
-        console.error('获取销售员列表失败:', error);
-        ElMessage.error('销售员列表加载失败');
-      }
-    };
-
-
-    const fetchCompanies = async () => {
-
-      try {
-        const response = await getCustomerNameList();
-        companyOptions.value = response.data.map((item: any) => ({
-          value: item,
-          label: item
-        }));
-      } catch (err) {
-        console.error('获取公司列表失败:', err)
-        ElMessage.error('公司列表加载失败')
-      }
-    }
-    const handlePageChange = (val: number) => {
-      currentPage.value = val;
+//删除订单列
+const handleDelete = (row: any) => {
+  ElMessageBox.confirm('确认删除该订单？', '警告', {
+    confirmButtonText: '确认',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(async () => {
+    const response = await deleteOrder(row.orderId);
+    if (response.data === 'success') {
+      ElMessage.success('删除成功');
       fetchData();
-    };
+    } else {
+      ElMessage.error('删除失败');
+    }
+  });
+};
 
-    const handleSelectionChange = (val: any[]) => {
-      selectedRows.value = val;
-    };
+const showAddDialog = () => {
+  newOrder.value = { status: '未完成' };
+  addDialogVisible.value = true;
+};
 
-    const handleSearch = () => {
-      currentPage.value = 1;
-      fetchData();
-    };
-    onMounted(() => {
-      fetchData();
-      fetchSalesmen();
-      fetchCompanies();
+const confirmAdd = async () => {
+  try {
+    const response = await addOrder(newOrder.value);
+    if (response.data === 'success') {
+      ElMessage.success('添加成功');
+      await fetchData();
+      addDialogVisible.value = false;
+    } else {
+      ElMessage.error('添加失败');
+    }
+  } catch (error) {
+    ElMessage.error('添加失败');
+  }
+};
+
+
+//  导入导出功能
+const handleExport = async () => {
+  try {
+    if (selectedRows.value.length > 0) {
+      const worksheet = XLSX.utils.json_to_sheet(selectedRows.value);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '订单数据');
+      XLSX.writeFile(workbook, `选中订单_${new Date().toISOString()}.xlsx`);
+      ElMessage.success('导出成功');
+    } else {
+      const params = {
+        startDate: dateRange.value?.[0],
+        endDate: dateRange.value?.[1],
+        company: companyFilter.value,
+        salesman: salesmanFilter.value,
+        status: statusFilter.value,
+        keyword: keywordFilter.value,
+        paymentStatus: paymentFilter.value
+      };
+      const response = await exportOrder(params);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `订单导出_${new Date().toISOString()}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      ElMessage.success('导出成功');
+    }
+  } catch (error) {
+    console.error('导出失败:', error);
+    ElMessage.error('导出失败');
+  }
+};
+
+const handleImport = async (options: any) => {
+  let loadingInstance: ReturnType<typeof ElLoading.service> | null = null;
+  try {
+    const formData = new FormData();
+    formData.append('file', options.file);
+    loadingInstance = ElLoading.service({
+      lock: true,
+      text: '正在导入，请稍候...',
+      background: 'rgba(0, 0, 0, 0.7)',
     });
+    const response = await importOrder(formData);
+
+    if (response.status === 200) {
+      ElMessage.success(`${response.data}`);
+      await fetchData();
+    } else {
+      ElMessage.error(`${response.data}`);
+    }
+  } catch (error) {
+    console.error('导入失败:', error);
+    ElMessage.error('文件导入失败，请检查文件格式或联系管理员');
+  } finally {
+    if (loadingInstance) {
+      loadingInstance.close();
+    }
+  }
+};
+
+const beforeImport = (file: File) => {
+  const isExcel = file.type.includes('sheet') || ['xlsx', 'xls'].includes(file.name.split('.').pop() || '');
+  const isLt10M = file.size / 1024 / 1024 < 10;
+  if (!isExcel) {
+    ElMessage.error('只能上传Excel文件!');
+    return false;
+  }
+  if (!isLt10M) {
+    ElMessage.error('文件大小不能超过10MB!');
+    return false;
+  }
+  return true;
+};
+//搜索条件下拉框数据
+const fetchSalesmen = async () => {
+  try {
+    const response = await getSalesmanList();
+    salesmanOptions.value = response.data.map((item: any) => ({
+      value: item,
+      label: item,
+    }));
+  } catch (error) {
+    console.error('获取销售员列表失败:', error);
+    ElMessage.error('销售员列表加载失败');
+  }
+};
+
+
+const fetchCompanies = async () => {
+
+  try {
+    const response = await getCustomerNameList();
+    companyOptions.value = response.data.map((item: any) => ({
+      value: item,
+      label: item
+    }));
+  } catch (err) {
+    console.error('获取公司列表失败:', err)
+    ElMessage.error('公司列表加载失败')
+  }
+}
+const handlePageChange = (val: number) => {
+  currentPage.value = val;
+  fetchData();
+};
+
+const handleSelectionChange = (val: any[]) => {
+  selectedRows.value = val;
+};
+
+const handleSearch = () => {
+  currentPage.value = 1;
+  fetchData();
+};
+onMounted(() => {
+  document.addEventListener('click', clickOutsideHandler)
+  fetchData();
+  fetchSalesmen();
+  fetchCompanies();
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('click', clickOutsideHandler)
+})
+
 </script>
 
 
 <style scoped>
 /* 单元格编辑样式 */
+
+
+.height-measure {
+  visibility: hidden;
+  position: absolute;
+  white-space: pre-wrap;
+  width: 100%;
+  padding: inherit;
+  line-height: inherit;
+  font-size: inherit;
+}
+
+.cell-textarea {
+  width: 100%;
+  height: 100%;
+
+  :deep(.el-textarea__inner) {
+    min-height: 32px !important;
+    /* 最小高度 */
+    padding: 4px 8px;
+    /* 调整内边距 */
+    line-height: 1.5;
+    /* 行高 */
+    box-shadow: none;
+    /* 去除聚焦阴影 */
+    border-radius: 0;
+    /* 去除圆角 */
+    border: 1px solid #409EFF;
+    /* 添加边框 */
+  }
+}
+
+/* 调整编辑单元格定位 */
 .cell-edit {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  padding: 2px;
+  z-index: 3;
+  height: v-bind('editForm._cellHeight || "auto"'); /* 动态绑定高度 */
   background: white;
-  z-index: 2;
+  box-shadow: 0 0 4px rgba(0,0,0,0.1);
+  /* 移除内边距 */
+
+  .el-textarea {
+    height: 100%;
+    
+    :deep(.el-textarea__inner) {
+      height: 100% !important;
+      min-height: v-bind('editForm._cellHeight || "32px"') !important;
+      padding: 4px 8px;
+      line-height: 1.5;
+      border: 1px solid #409EFF;
+    }
+   
+  }
 }
+
+
 
 .cell-edit :deep(.el-input__wrapper) {
   height: 100%;
   padding: 0px;
 }
 .cell-content {
+  position: relative;
   width: 100%;
-  height: 100%;
-  min-height: 26px;
-  padding: 0px;
-  cursor: cell;
+  min-height: 32px;
+  padding: 1px 1px;
+  height: v-bind('editForm._cellHeight || "auto"'); /* 保持高度不变 */
 }
+
+
 /* 表单项提示 */
 .form-item-with-tip {
   position: relative;
@@ -579,6 +638,7 @@ const getDatePlaceholder = (key: string) => {
   color: #ff4444;
   font-size: 12px;
 }
+
 /* 增加紧凑布局样式 */
 .search-filters {
   :deep(.el-col) {
@@ -598,7 +658,7 @@ const getDatePlaceholder = (key: string) => {
 
   .el-date-editor.el-input__wrapper {
     width: 100%;
-    padding: 0 10px;
+    padding: 0 4px;
   }
 }
 
@@ -618,7 +678,7 @@ const getDatePlaceholder = (key: string) => {
 /* 优化状态显示 */
 .status-tag {
   font-size: 12px;
-  padding: 2px 8px;
+  padding: 2px 4px;
   border-radius: 12px;
   display: inline-block;
 }
