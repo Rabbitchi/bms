@@ -5,6 +5,8 @@
         <el-col :span="16">
           <div class="button-group">
             <el-button type="primary" @click="showAddDialog">新增订单</el-button>
+            <el-button type="danger" @click="handleBatchDelete" :disabled="selectedRows.length === 0">批量删除</el-button>
+            <el-button type="danger" @click="handleBatchDelete">清空数据库</el-button>
             <el-button @click="handleExport" style="margin-left: 10px">导出Excel</el-button>
             <el-upload action="" :show-file-list="false" :http-request="handleImport" :before-upload="beforeImport"
               accept=".xlsx, .xls" style="margin-left: 10px">
@@ -164,7 +166,7 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, onBeforeUnmount,nextTick } from 'vue';
-import { getOrderList, addOrder, updateOrder, deleteOrder, exportOrder, importOrder } from '@/api/order';
+import { getOrderList, addOrder, updateOrder, deleteOrder, exportOrder, importOrder,deleteBatchOrder } from '@/api/order';
 import { getSalesmanList } from '@/api/employee';
 import { getCustomerNameList } from "@/api/customer";
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
@@ -215,31 +217,12 @@ const handleCellDblClick = (row: any, rowIndex: number, columnKey: string, event
 
    // 获取单元格高度
    nextTick(() => {
-    // const measureDiv = (event.currentTarget as HTMLElement).querySelector('.height-measure');
-    // if (measureDiv) {
-    //   const computedStyle = window.getComputedStyle(measureDiv);
-    //   const lineHeight = parseInt(computedStyle.lineHeight);
-    //   const padding = parseInt(computedStyle.paddingTop) + parseInt(computedStyle.paddingBottom);
-      
-    //   // 计算实际内容高度
-    //   const contentHeight = Math.max(
-    //     measureDiv.scrollHeight,
-    //     lineHeight + padding
-    //   );
-      
-    //   editForm.value._cellHeight = `${contentHeight}px`;
-    // }
-
     const cellContent = (event.currentTarget as HTMLElement).querySelector('.cell-content');
     if (cellContent) {
       const cellHeight = cellContent.clientHeight;
       editForm.value._cellHeight = `${cellHeight}px`;
     }
-
-
   });
-
-
 };
 
 
@@ -331,6 +314,39 @@ const handleCellStyle = ({ column }: { column: any, row: any }) => {
   }
   return {};
 }
+
+// 批量删除处理
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(`确认${selectedRows.value.length==0 ? "清空数据库所有" : "删除选中的"+selectedRows.value.length+"条"}订单吗？`, '警告', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    });
+    
+    // 提取选中订单的ID
+    const orderIds = selectedRows.value.map(row => row.orderId);
+    console.log('选中订单ID:', orderIds);
+    
+    // 调用批量删除接口（需要后端支持）
+    const response = await deleteBatchOrder(orderIds);
+    
+    if (response.data === 'success') {
+      ElMessage.success('删除成功');
+      // 清空选中项并刷新数据
+      selectedRows.value = [];
+      await fetchData();
+    } else {
+      ElMessage.error('删除失败');
+    }
+  } catch (error) {
+    // 用户取消删除时不处理
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败');
+    }
+  }
+};
+
 
 
 
@@ -551,7 +567,15 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* 单元格编辑样式 */
+.el-button[type="danger"]:not(:disabled) {
+  background-color: #ff4444;
+  border-color: #ff4444;
+}
 
+.el-button[type="danger"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .height-measure {
   visibility: hidden;

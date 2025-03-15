@@ -4,6 +4,9 @@ export const getOrderList = (params: any) => httpClient.get('/order/pageFind', {
 export const addOrder = (data: any) => httpClient.post('/order/add', data);
 export const updateOrder = (data: any) => httpClient.post('/order/update', data);
 export const deleteOrder = (orderId: string) => httpClient.post(`/order/delete?orderId=${orderId}`);
+
+export const deleteBatchOrder = (orderIds: string[]) => httpClient.post('/order/batchDelete',  {orderIds} );
+
 export const exportOrder = (params: any) => httpClient.get('/order/export', { params, responseType: 'blob' });
 export const importOrder = (formData: FormData) => httpClient.post('/order/import', formData, {
   headers: {
